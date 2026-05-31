@@ -1,0 +1,11 @@
+raw_string	sku_key	note
+C9300-24UX-E	switch:cisco:c9300-24ux-e	Catalyst 9300 24p mGig UPOE (device)
+CON-SNTP-C930024U	switch:cisco:c9300-24ux-e	SNTC-24x7x4 support for C9300-24UX-E -> support_yr
+C9300-NM-8X	switch:cisco:c9300-nm-8x	Catalyst 9300 8x10GE network module
+C9300-DNA-E-24-3Y	switch:cisco:c9300-dna-e-24	DNA Essentials 24p, 3-YEAR TERM license (total, not /yr)
+C1300-24XTS	switch:cisco:c1300-24xts	Catalyst 1300 12p10GE + 12p SFP+ (device)
+CON-SNT-C1324XTS	switch:cisco:c1300-24xts	SNTC-8x5xNBD support for C1300-24XTS -> support_yr
+AT-x950-28XTQm-E01	switch:alliedtelesis:at-x950-28xtqm	x950 24p mGig stackable (device)
+AT-x950-28XTQm-NCA1	switch:alliedtelesis:at-x950-28xtqm	Net.Cover Advanced 1yr -> support_yr
+AT-XEM2-12XS v2-E01	switch:alliedtelesis:at-xem2-12xs	12x10G SFP+ line card (module)
+AT-PWR600-E11	switch:alliedtelesis:at-pwr600	600W PSU for x950

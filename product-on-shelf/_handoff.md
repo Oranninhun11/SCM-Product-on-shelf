@@ -326,3 +326,243 @@ All in `index.html`, verified via headless-Chrome screenshots (mobile closed/ope
 - **Tailwind Play CDN** — still dev-only (prints console warning + adds load latency in prod). Real fix =
   precompile Tailwind to static CSS, which adds a build step the project intentionally avoids for now.
   Works in Apps Script as-is; revisit at deploy hardening. (lucide is now pinned; Tailwind is the remaining one.)
+
+---
+
+# Handoff — Product on Shelf (cont.)
+_Session: 2026-05-29 PM · software-engineer mode · /handoff_
+
+## Stage
+First-ever commit landed. App = 19 mock-priced flows + cart + client-side quotation button (placeholder),
+mobile drawer + sticky total + a11y done, DB design drafted (`DB_SCHEMA.md`/`Setup.gs`). Live pricing &
+real quotation export NOT yet wired. **Now committed; not pushed; not deployed.**
+
+## Where we left off
+Committed `product-on-shelf/` only — branch **`product-on-shelf-app`**, commit **`3498f47`** (12 files).
+This session also: custom-line input wrapped in a `<form>` so **Enter submits** (#5, verified); **docs synced**
+(Backup now software-license-only in `README.md` + `SHEET_SCHEMA.md`, #2); added **`tools/shot.sh`** verify
+helper (#3, tested).
+
+## Open questions / blockers
+- 🟡 **Push `product-on-shelf-app` or keep local?** — Oran to decide (asked; unanswered).
+- 🔴 **⚠️ Repo side effect (OUTSIDE product-on-shelf):** my first commit accidentally swept in pre-staged
+  SCM presale changes (`.claude/agents`, skills, scripts) + `.DS_Store`. I undid it (`git reset HEAD~1`) and
+  re-committed cleanly — but that **unstaged** those SCM files. Content is INTACT in the working tree; they
+  just need re-`git add` before Oran commits them separately. Not this app's concern.
+- 🟡 Still parked: **keep vs remove the client-side "Create quotation" button** (wrong mechanism — see above).
+- 🔴 Exact quotation detail mapping — Oran defines after DB design (now drafted).
+
+## Next concrete step
+Wire flows to live pricing via the DB: per `DB_SCHEMA.md`, the catalog `Price` tab FEEDS `window.PRICING`
+(Firewall seam proven) — then build the **template-fill quotation export** (openpyxl now / Apps Script on deploy).
+
+## Suggested skills
+- **`/oran-software-engineer`** — all code work (surgical; verify with `tools/shot.sh` / openpyxl readback).
+
+## Artifacts this session
+- `product-on-shelf/index.html` — form-submit fix (+ earlier mobile/sticky/a11y/quotation-button work).
+- `product-on-shelf/README.md`, `SHEET_SCHEMA.md` — Backup → software-license-only.
+- `product-on-shelf/tools/shot.sh` — **new** headless-Chrome screenshot helper.
+- `product-on-shelf/_handoff.md` — this file.
+- (Untracked, throwaway: `product-on-shelf/_demo-filled-template.xlsx`.)
+
+## Decisions (the why)
+- **Clean, scoped commit** — redid the over-broad commit so history isn't polluted with unrelated SCM work + junk.
+- **Excluded the demo xlsx** from git — regenerable throwaway, not a source artifact.
+- Deferred loading-states & dynamic-buffer-label as **speculative until Phase 3** (no async data / buffer still 20%).
+
+> Resume: `/oran-software-engineer` on branch `product-on-shelf-app` — wire flows to `window.PRICING` per
+> `DB_SCHEMA.md`, then the template-fill quotation export. Decide: push the branch? keep/remove the JS button?
+
+---
+
+# Handoff — Product on Shelf (cont.)
+_Session: 2026-05-31 · software-engineer mode · /handoff_
+
+## Stage
+**Live-pricing seam DONE for ALL 23 flows** (was just Firewall). App is now built from `src/`
+partials via `build.py`. Committed AND pushed/deployed to Apps Script. Pricing is still the
+**mock fallback** at runtime (nothing populates `window.PRICING` server-side yet).
+
+## Where we left off
+Wired every flow IIFE to read `window.PRICING` with mock fallback (replicating the Firewall POC),
+rebuilt `index.html` from `src/`, committed (`ff4d753`), `clasp push`-ed, and **redeployed the `@3`
+web-app deployment → `@4`** (same `/exec` URL now serves the live-pricing build). The `@HEAD`
+deployment also serves it. Verified parity (byte-identical render with no PRICING, 44 containers via
+headless Chrome) + overrides flowing through before pushing.
+
+## Seam contract (what the Sheet must emit into `window.PRICING`)
+- **Per-product data** → `P.<product>.*`: `catalog`/`existing`/`vendors`/`base`/`ap`/`controller`/
+  `plans`/`service`/`meta`, plus price maps (`per_ep`, `per_gbday`, `per_core`, `per_socket`,
+  `per_site`, `platform`, `sdwan_yr`, `support_yr`, `support_rate`, `lic_ctrl`/`lic_cloud`,
+  `pack_price`, `cal_price`, `price`, `tier_factor`, `runtime_mult`, `user_mult`, `ret_mult`,
+  `edition_mult`). Product keys = DB enum (note: ws.html → `winsvr`, emailsase.html → `esec`,
+  server_standalone.html → `server`; `*_new` variants SHARE the base product namespace).
+- **Shared** → `P.implementation.<product>`, `P.multipliers.sla`/`.location`, `P.knobs.buffer`,
+  scalar knobs `P.knobs.<product>_<name>` (e.g. `switch_nonpoe_disc`, `server_ram_rate/disk_rate`,
+  `firewall_site_prep`).
+- **Left in code (policy, NOT price)**: `GROWTH` ×1.2, `MIN_NODES`/N+1, WinSvr `MIN_CORES`/
+  `MIN_PER_PROC`, `VMWARE_MIN_CORES`, `RECOMMENDED`, all label maps.
+
+## Open questions / blockers
+- 🔴 **Nothing populates `window.PRICING` yet** — deployed app serves mocks. Next real step is
+  `Code.gs doGet` → `createTemplateFromFile` + inject `window.PRICING` from the catalog `Price` tab
+  (per `DB_SCHEMA.md` `buildCatalog()`).
+- 🟡 **HCI/server_new `autoNodes()` assumes exactly 2 vendors** (`VENDORS[0]`/`[1]`) — a Sheet
+  `hci.vendors` list ≠ 2 throws. Pre-existing; flag when populating real vendor data.
+- 🟡 **Static "incl. 20% buffer" labels** now can go stale (buffer is Sheet-tunable across all flows).
+  Make dynamic when injecting real PRICING. (Still deferred, as before.)
+- 🟡 Still untracked/uncommitted: `DB_SCHEMA.md`, `Setup.gs`, `build_db_xlsx.py`,
+  `Product_on_Shelf_DB.xlsx`, `.clasp.json`/`.claspignore`, `Flow diagram/`, modified
+  `README.md`/`_handoff.md`. Left for a separate commit (DB/deploy concern, not the seam).
+
+## Next concrete step
+Wire `Code.gs` `doGet` to inject `window.PRICING` from the catalog `Price` tab (Firewall first as the
+parity check), so the deployed app reads real numbers instead of mocks. Then the quotation export.
+
+## Suggested skills
+- **`/oran-software-engineer`** — verify via the throwaway harness `/tmp/pos_parity.py`
+  (dumps every flow's rendered cards; `--pricing FILE.json` to test an override) + `tools/shot.sh`.
+
+## Artifacts produced this session
+- `product-on-shelf/src/flows/*.html` — 22 flows wired to the seam (Firewall already was).
+- `product-on-shelf/index.html` — rebuilt from `src/`.
+- Commit `ff4d753` (branch `product-on-shelf-app`): `src/`, `build.py`, `index.html`.
+- Apps Script deployment `@4` (`AKfycbxMT6TI…`) — same `/exec` URL, live-pricing build.
+
+## Decisions (the why)
+- **Minimal line-targeted edits** — only wrapped `var X = …` declaration lines (`PX.key || {…}`),
+  never touched data literals, so the mock fallback stays byte-identical and parity is structural.
+- **`*_new` variants share the base product namespace** — DB enum has no `_new` products; new-install
+  and replacement of the same device draw from one catalog.
+- **Sizing house-rules stay in code** — ×1.2/N+1/core-minimums are policy (CLAUDE.md), not Sheet prices.
+- **Committed src/ + build.py + index.html as one buildable unit**; redeployed `@3`→`@4` (Oran's pick)
+  to keep the shared `/exec` URL stable.
+
+## References
+- `DB_SCHEMA.md` (`buildCatalog()` feed) · `Code.gs`/`Setup.gs` · `CLAUDE.md` house rules.
+- Firewall seam (`src/flows/firewall.html`) = the template that was replicated.
+
+> Resume: `/oran-software-engineer` on `product-on-shelf-app` — wire `Code.gs doGet` to inject
+> `window.PRICING` from the catalog `Price` tab (Firewall first), then template-fill quotation export.
+
+---
+
+# Handoff — Product on Shelf (cont.)
+_Session: 2026-05-31 PM — pricelist UI + email→Price ingestion_
+
+## Stage
+Data-design / ingestion. Email `[EXT]` → `Price` pull **built + LIVE** (daily GAS trigger). Read path
+(app shows real prices) NOT wired yet — app still serves mock `DEFAULTS`.
+
+## Where we left off
+Just answered Oran's "where is firewall/HCI/other?" — diagnosed that `[EXT]` is an unreliable signal
+(many vendor price replies have NO `[EXT]`: e.g. `SCM:Shamir TH /ขอราคา C1300-16 XTS`,
+`[Request price] Switch ToR/BCM`, `New Cisco Core Switch/PKM`, `MA Veeam Asia Golden`). Recommended
+**#1: switch fetch from `subject:[EXT]` → distributor-domain allowlist** (vstecs/ingrammicro/exclusive-
+networks/nutanix/lenovo/hpe/h3c/sisthai/fortinet). **Awaiting Oran's go to implement #1.**
+
+## What got built & verified this session
+- **Pricelist UI** — `src/flows/_pricelist.html` rewritten: every non-firewall product now renders the
+  firewall-style Model&options + itemized quotation (HW: Device/Site prep/Impl/Support·yr·SLA; SW:
+  License/Term/Onboarding/Support). Pushed + live.
+- **`Ingest_Email.gs`** (NEW, the main work) — GAS daily trigger pulls `[EXT]` mail, parses inline HTML
+  price table (per-`<table>`, header-keyword detection — handles VST/Ingram/AT), normalizes part→`sku_key`
+  via `_alias`, append-with-history upsert into `Price`, `_sync_log`, optional Chat notify. `DRY_RUN=false`.
+- **Live state (verified by reading the sheet back):** `Price` has Cisco switch rows; `seedAliases()`
+  filled ~44 discovered SKUs; daily trigger installed (≈02:00). 9-month backfill ran (`scanned 258`).
+
+## Open questions / blockers
+- 🟢 **#1 distributor-domain fetch** — recommended, **awaiting go**. Biggest coverage win, ~1-line query change.
+- 🔴 **Firewall / HCI-Nutanix / server-HW absent** — these quotes arrive as **xlsx/PDF attachments**, not
+  inline tables. Needs **#2 xlsx-attachment parsing** (GAS → Drive convert → read). PDF = manual/OCR (#3, defer).
+- 🟡 `_alias` mappings were wiped once mid-session (all blank) → `seedAliases()` rewritten to FILL blanks
+  (upsert), not just append. If alias goes blank again, re-run `seedAliases`.
+- 🟡 Classifications rough: Veeam→`lic_yr`, endpoint SKU may log as `hw`, `EPESCECE`/`RH00004` vendor 🟡.
+- 🟡 Read path still unwired — `Code.gs doGet` must inject `window.PRICING` from catalog (per `DB_SCHEMA.md`).
+
+## Next concrete step
+Implement **#1**: replace `INGEST.QUERY_DAILY`/backfill query `subject:[EXT]` with a distributor-domain
+allowlist (keep `[EXT]` as OR fallback), as an editable config knob; push; Oran re-runs `resetBackfill` +
+`backfillEmailPrices`. Then **#2** xlsx-attachment parsing for firewall/HCI.
+
+## Suggested skills
+- **`/oran-software-engineer`** — Ingest changes. Verify by READING the sheet back (Google access is
+  read-only; can't run GAS). clasp push works locally from here.
+
+## Artifacts produced this session
+- `product-on-shelf/Ingest_Email.gs` (NEW) · `src/flows/_pricelist.html` (rewritten) ·
+  `index.html`/`preview.html` rebuilt · `.claspignore` (+`!Ingest_Email.gs`) ·
+  `_seed_alias.tsv`/`_seed_price.tsv` (local seed bootstrap, superseded by `seedAliases()`).
+- Memory: `project_pos_ingestion_live.md`, `reference_product_on_shelf_deploy.md` (updated).
+
+## Decisions (the why)
+- **Parse HTML `<table>`, not plaintext** — real `[EXT]` prices are HTML tables; plaintext flattens
+  unpredictably. Header-keyword detection = one parser for all vendor layouts.
+- **`_alias` is the capture gate** — only mapped part numbers reach `Price`; everything else queues in
+  `_alias` blank. Keeps `Price` clean; house rule = never fabricate.
+- **All-Apps-Script, no Rundeck/Python** for email/sheet pulls — GAS time-driven triggers run on Google,
+  no laptop/Claude. Rundeck only ever needed for the local NotebookLM `nlm` CLI (deferred).
+- **`[EXT]` is the wrong signal** (this session's key finding) — sender-domain is reliable; `[EXT]` is
+  inconsistent sales tagging.
+
+## References
+- `DB_SCHEMA.md` (source (a) email→Price; 4-source design) · live DB sheet `1kzKWvaJN7z7…` ·
+  `reference_product_on_shelf_deploy.md` (clasp v3: `open-script`/`open-web-app`; `.claspignore` allowlist).
+
+> Resume: `/oran-software-engineer` on `product-on-shelf-app` — implement #1 (distributor-domain fetch
+> in `Ingest_Email.gs`), push, Oran re-runs `resetBackfill`+`backfillEmailPrices`; then #2 xlsx attachments.
+
+---
+
+# Handoff — Product on Shelf (cont.)
+_Session: 2026-06-01 · software-engineer mode · ingestion #1 distributor-domain fetch + #2 xlsx parser_
+
+## Stage
+`Ingest_Email.gs` only. **#1 distributor-domain fetch DONE + pushed (live).** **#2 xlsx-attachment
+parser DONE + pushed but DORMANT** (guarded by `typeof Drive`; activates when Oran enables the Drive
+advanced service + reauthorizes). No `appsscript.json` scope change pushed — the live daily trigger
+keeps running on its existing Gmail/Sheets auth, untouched.
+
+## Built this session (all in `Ingest_Email.gs`, verified by syntax parse + local logic tests)
+- **#1 fetch broadened off the unreliable `[EXT]` signal → distributor sender-domain allowlist.**
+  New knobs: `INGEST.DISTRIBUTOR_DOMAINS` (vstecs/ingram/exclusive-networks/nutanix/lenovo/hpe/h3c/
+  sisthai/fortinet — substring-matched, editable), `USE_EXT_FALLBACK` (keeps `subject:[EXT]` OR-ed in).
+  One list drives BOTH the Gmail search (`{from:(…) subject:[EXT]} newer_than:…`, via `buildQuery_`/
+  `sourceClause_`) AND the per-message gate (`isFromDistributor_`) — the gate was the hidden second
+  filter that would have dropped every domain-only mail if left as the old `[EXT]`-only check.
+- **#2 xlsx attachments.** `parseAttachmentTables_`→`isSpreadsheetAttachment_`→`readXlsxBlob_`: converts
+  each .xls/.xlsx attachment to a temp Google Sheet (Drive v2 `Files.insert {convert:true}`), reads it via
+  the SAME `extractPricedRows_` (factored out of `parsePriceTable_` so HTML + xlsx share column detection),
+  trashes the temp file, feeds items into the existing `reconcile_` pipeline. Cells String()-coerced
+  (xlsx gives numbers/dates). Dormant until Drive enabled.
+
+## Oran's two manual steps (Claude can't run GAS / can't reauthorize)
+1. **Activate #1 over history:** Apps Script editor → run `resetBackfill()`, then `backfillEmailPrices()`.
+   Re-sweeps 9 months under the wider net. Safe to re-run (price_id dedupe + append-with-history).
+   Then `seedAliases()` if new unmatched parts appear; re-run backfill. Daily trigger already covers go-forward.
+2. **Activate #2:** editor → Services (+) → add **Drive API** (advanced service) → reauthorize when prompted.
+   That adds the Drive scope and flips the `typeof Drive` guard on. First distributor mail with an xlsx
+   quote (Fortinet/HCI/server) is the live test — watch `_sync_log` + `_alias` for the new parts.
+
+## Open / risks
+- 🟡 #2 unverifiable until reauth — no sample xlsx attachment in-repo + can't run GAS. Pure extractor IS
+  tested; the Drive-conversion plumbing is GAS-only and runs first on Oran's reauth.
+- 🟡 New firewall/HCI/server part numbers will land in `_alias` BLANK (capture gate) — curate + add to
+  `ALIAS_SEED`, run `seedAliases()`. House rule: only mapped parts reach `Price`.
+- 🟡 Drive v2 advanced service is the conversion path (`Files.insert/remove`, `convert:true`). If the
+  enabled service is v3, switch to `Files.create` + remove the `convert` flag.
+- 🔴 Read path STILL unwired — app serves mock `DEFAULTS`; `Code.gs doGet` must inject `window.PRICING`
+  from the catalog `Price` tab (`DB_SCHEMA.md buildCatalog()`). Unchanged this session.
+- Working tree NOT committed (repo has unrelated SCM presale changes staged; left alone deliberately).
+
+## Decisions (the why)
+- **One DISTRIBUTOR_DOMAINS list, two consumers** — query + message gate can't drift; domain is the
+  reliable signal ([EXT] is inconsistent sales tagging, the prior session's key finding).
+- **#2 pushed dormant, no manifest scope change** — a Drive-scope increase suspends time-driven triggers
+  until reauth; Oran is away and the trigger must keep Price fresh. `typeof Drive` guard = zero-risk staging.
+- **Shared `extractPricedRows_`** — HTML and xlsx go through identical header/column detection; one parser to reason about.
+
+> Resume: `/oran-software-engineer` on `product-on-shelf-app`. If #1/#2 verified, next is the READ path
+> (`Code.gs doGet` → inject `window.PRICING` from `Price`, Firewall first) — the last thing between the
+> app and real prices. Then the template-fill quotation export.

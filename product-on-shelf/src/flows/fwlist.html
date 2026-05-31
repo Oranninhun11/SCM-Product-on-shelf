@@ -1,0 +1,112 @@
+  <!-- ===================== Firewall — Price list (Firewall ▸ Price list tab) ===================== -->
+  <script>
+    /**
+     * Firewall price-list path: pick a FortiGate model directly from the price list
+     * (no sizing), set the commercial options (units, license/MA term, SLA, advanced
+     * replacement, SOW scope, site prep, location), and "Add to estimate". Lives as the
+     * "Price list" tab inside the Firewall page.
+     *
+     * MOCK PRICING. Reuses the SAME knobs as the Firewall sizing flow — window.PRICING
+     * fills them from the Sheet in Phase 3. Prices are THB.
+     */
+    (function () {
+      var P  = window.PRICING || {};
+      var PF = P.firewall || {};
+
+      // Flat price list: hw = list price/unit, lic = annual MA/support/unit. Phase 3 fills from the Sheet.
+      var PRICELIST = PF.pricelist || [
+        { id: 'fg-90g',  model: 'FortiGate 90G',  price: 91000,  lic: 32000 },
+        { id: 'fg-120g', model: 'FortiGate 120G', price: 121000, lic: 42000 },
+        { id: 'fg-200g', model: 'FortiGate 200G', price: 201000, lic: 70000 }
+      ];
+
+      // Same commercial knobs as the sizing flow (Sheet → window.PRICING in Phase 3).
+      var IMPL_BASE = (P.implementation && P.implementation.firewall) || { basic: 35000, standard: 75000, complex: 140000 };
+      var SLA_MULT  = (P.multipliers && P.multipliers.sla)      || { nbd: 1.0, '8x5x4': 1.25, '24x7x4': 1.6 };
+      var LOC_MULT  = (P.multipliers && P.multipliers.location) || { bkk: 1.0, upcountry: 1.18 };
+      var ADV_MULT  = (P.multipliers && P.multipliers.adv_replacement != null) ? P.multipliers.adv_replacement : 1.15; // uplift on support
+      var SITE_PREP = (P.knobs && P.knobs.firewall_site_prep != null) ? P.knobs.firewall_site_prep : 25000; // flat per project
+      var BUFFER    = (P.knobs && P.knobs.buffer != null) ? P.knobs.buffer : 1.20;
+      var SLA_LABEL = { nbd: 'NBD', '8x5x4': '8×5×4', '24x7x4': '24×7×4' };
+
+      var thb     = function (n) { return '฿' + Math.round(n).toLocaleString('en-US'); };
+      var round1k = function (n) { return Math.round(n / 1000) * 1000; };
+      var el      = function (id) { return document.getElementById(id); };
+
+      var modelEl = el('fwl-model');
+      if (!modelEl) return;             // panel not on the page
+      var sumEl = el('fwl-summary');
+
+      function chosen() {
+        var id = modelEl.value;
+        return PRICELIST.filter(function (s) { return s.id === id; })[0] || PRICELIST[0];
+      }
+
+      function readInputs() {
+        return {
+          units:    Math.max(1, parseInt(el('fwl-units').value, 10) || 1),
+          years:    parseInt(el('fwl-years').value, 10),
+          sla:      el('fwl-sla').value,
+          sow:      el('fwl-sow').value,
+          location: el('fwl-location').value,
+          adv:      el('fwl-adv').checked,
+          site:     el('fwl-site').checked
+        };
+      }
+
+      function price(s, inp) {
+        var device   = s.price * inp.units;                                     // only the device scales with qty
+        var sitePrep = inp.site ? SITE_PREP : 0;                                // flat per project
+        var impl     = IMPL_BASE[inp.sow] * LOC_MULT[inp.location];             // project-level
+        var support  = s.lic * inp.years * SLA_MULT[inp.sla] * (inp.adv ? ADV_MULT : 1);
+        var subtotal = device + sitePrep + impl + support;
+        return { device: device, sitePrep: sitePrep, impl: impl, support: support, total: round1k(subtotal * BUFFER) };
+      }
+
+      function row(label, value) {
+        return '<div class="flex justify-between"><span class="text-muted-foreground">' + label +
+               '</span><span class="tabular-nums">' + value + '</span></div>';
+      }
+
+      function render() {
+        var s = chosen(), inp = readInputs(), r = price(s, inp);
+        sumEl.innerHTML =
+          '<div class="card flex flex-col" data-family="fortinet">' +
+            '<div class="card-header">' +
+              '<div class="flex items-center gap-2">' +
+                '<i data-lucide="shield" class="h-4 w-4 text-brand-navy"></i>' +
+                '<div class="card-title">Fortinet</div>' +
+              '</div>' +
+              '<div class="card-desc pt-0.5">' + s.model + ' · ' + inp.units + ' unit' + (inp.units > 1 ? 's' : '') + '</div>' +
+            '</div>' +
+            '<div class="card-content flex-1 space-y-1.5 text-sm">' +
+              row('Device (' + inp.units + ' × ' + thb(s.price) + ')', thb(r.device)) +
+              row('Site prep', inp.site ? thb(r.sitePrep) : '—') +
+              row('Implementation', thb(r.impl)) +
+              row('Support · ' + inp.years + ' yr · ' + SLA_LABEL[inp.sla] + (inp.adv ? ' · Adv. RMA' : ''), thb(r.support)) +
+            '</div>' +
+            '<div class="mt-auto flex flex-col gap-3 border-t border-border p-6 pt-4">' +
+              '<div class="flex items-baseline justify-between">' +
+                '<span class="text-sm text-muted-foreground">Est. total</span>' +
+                '<span class="text-xl font-semibold text-brand-navy tabular-nums">' + thb(r.total) + '</span>' +
+              '</div>' +
+              '<button class="btn btn-primary w-full" data-select="fortinet">Add to estimate</button>' +
+            '</div>' +
+          '</div>';
+        lucide.createIcons();
+      }
+
+      function init() {
+        modelEl.innerHTML = PRICELIST.map(function (s) {
+          return '<option value="' + s.id + '">' + s.model + ' — ' + thb(s.price) + '</option>';
+        }).join('');
+        var nodes = document.querySelectorAll('#fwl-model, #fwl-units, #fwl-years, #fwl-sla, #fwl-sow, #fwl-location, #fwl-adv, #fwl-site');
+        ['input', 'change'].forEach(function (evt) {
+          nodes.forEach(function (n) { n.addEventListener(evt, render); });
+        });
+        render();
+      }
+
+      init();
+    })();
+  </script>

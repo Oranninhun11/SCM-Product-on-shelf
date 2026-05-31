@@ -11,8 +11,81 @@
               <span class="badge badge-secondary shrink-0">Mock pricing</span>
             </div>
             <div class="mt-5" data-tabs>
-              <div class="tablist"><button class="tab active" data-tab="adc-new">New / Expand</button></div>
-              <div class="mt-5" data-panel="adc-new">
+              <div class="tablist">
+                <button class="tab active" data-tab="adc-pricelist">Price list</button>
+                <button class="tab" data-tab="adc-rep">Replacement</button>
+                <button class="tab" data-tab="adc-new">New install</button>
+              </div>
+
+              <!-- Project: Price list (pick a SKU) -->
+              <div class="mt-5" data-panel="adc-pricelist">
+                <div data-pricelist="adc"></div>
+              </div>
+
+              <div class="mt-5 hidden" data-panel="adc-rep">
+                <div class="card mt-6">
+                  <div class="card-header"><div class="card-title">Requirements</div></div>
+                  <div class="card-content grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    <div class="grid gap-1.5">
+                      <label class="label" for="adcr-model">Existing model</label>
+                      <select id="adcr-model" class="select"></select>
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label">Detected</label>
+                      <div id="adcr-detected" class="input flex items-center bg-muted/40 text-muted-foreground">&mdash;</div>
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="adcr-units">Units of devices</label>
+                      <input id="adcr-units" type="number" min="1" value="1" class="input" />
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="adcr-deploy">Deployment</label>
+                      <select id="adcr-deploy" class="select">
+                        <option value="single" selected>Single appliance</option>
+                        <option value="ha">HA pair (active-passive)</option>
+                      </select>
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="adcr-sow">SOW scope</label>
+                      <select id="adcr-sow" class="select">
+                        <option value="basic">Basic &mdash; swap + VIPs</option>
+                        <option value="standard" selected>Standard &mdash; migrate LB + SSL offload</option>
+                        <option value="complex">Complex &mdash; WAF + GSLB + automation</option>
+                      </select>
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="adcr-years">Support term</label>
+                      <select id="adcr-years" class="select">
+                        <option value="1">1 year</option>
+                        <option value="3" selected>3 years</option>
+                        <option value="5">5 years</option>
+                      </select>
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="adcr-sla">SLA tier</label>
+                      <select id="adcr-sla" class="select">
+                        <option value="nbd" selected>NBD (Next Business Day)</option>
+                        <option value="8x5x4">8&times;5&times;4</option>
+                        <option value="24x7x4">24&times;7&times;4</option>
+                      </select>
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="adcr-location">Location</label>
+                      <select id="adcr-location" class="select">
+                        <option value="bkk" selected>Bangkok / metro</option>
+                        <option value="upcountry">Upcountry</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+                <div class="mt-6 flex flex-wrap items-baseline justify-between gap-2">
+                  <h2 class="text-lg font-semibold tracking-tight">Replacement options</h2>
+                  <span class="text-xs text-muted-foreground">THB &middot; incl. 20% buffer &middot; matched to existing class</span>
+                </div>
+                <div id="adcr-options" class="mt-3 grid gap-4 sm:grid-cols-2"></div>
+              </div><!-- /panel adc-rep -->
+
+              <div class="mt-5 hidden" data-panel="adc-new">
                 <div class="card mt-6">
                   <div class="card-header"><div class="card-title">Requirements</div></div>
                   <div class="card-content grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

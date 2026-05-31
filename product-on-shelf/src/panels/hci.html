@@ -13,12 +13,17 @@
 
             <div class="mt-5" data-tabs>
               <div class="tablist">
-                <button class="tab active" data-tab="hci-refresh">Refresh</button>
+                <button class="tab active" data-tab="hci-pricelist">Price list</button>
+                <button class="tab" data-tab="hci-refresh">Refresh</button>
                 <button class="tab" data-tab="hci-new">New install</button>
               </div>
 
-              <!-- Project: Refresh (Nutanix / Supermicro) -->
-              <div class="mt-5" data-panel="hci-refresh">
+              <!-- Project: Price list (pick a SKU) -->
+              <div class="mt-5" data-panel="hci-pricelist">
+                <div data-pricelist="hci"></div>
+              </div>
+
+              <div class="mt-5 hidden" data-panel="hci-refresh">
 
             <!-- Requirements -->
             <div class="card mt-6">

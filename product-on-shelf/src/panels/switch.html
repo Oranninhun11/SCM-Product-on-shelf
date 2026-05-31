@@ -13,12 +13,17 @@
 
             <div class="mt-5" data-tabs>
               <div class="tablist">
-                <button class="tab active" data-tab="sw-replacement">Replacement</button>
+                <button class="tab active" data-tab="switch-pricelist">Price list</button>
+                <button class="tab" data-tab="sw-replacement">Replacement</button>
                 <button class="tab" data-tab="sw-new">New install</button>
               </div>
 
-              <!-- Project: Replacement (Cisco / Aruba) -->
-              <div class="mt-5" data-panel="sw-replacement">
+              <!-- Project: Price list (pick a SKU) -->
+              <div class="mt-5" data-panel="switch-pricelist">
+                <div data-pricelist="switch"></div>
+              </div>
+
+              <div class="mt-5 hidden" data-panel="sw-replacement">
 
                 <!-- Requirements -->
                 <div class="card mt-6">

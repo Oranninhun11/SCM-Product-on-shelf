@@ -13,12 +13,13 @@
 
             <div class="mt-5" data-tabs>
               <div class="tablist">
-                <button class="tab active" data-tab="fw-replacement">Replacement</button>
+                <button class="tab active" data-tab="fw-pricelist">Price list</button>
+                <button class="tab" data-tab="fw-replacement">Replacement</button>
                 <button class="tab" data-tab="fw-new">New install</button>
               </div>
 
               <!-- Project: Replacement (Fortinet / Palo Alto) -->
-              <div class="mt-5" data-panel="fw-replacement">
+              <div class="mt-5 hidden" data-panel="fw-replacement">
 
             <!-- Requirements -->
             <div class="card mt-6">
@@ -139,6 +140,74 @@
                 <div id="fwn-sizing" class="mt-2"></div>
                 <div id="fwn-options" class="mt-3 grid gap-4 sm:grid-cols-2"></div>
               </div><!-- /panel fw-new -->
+
+              <!-- Project: Price list (pick a SKU) -->
+              <div class="mt-5" data-panel="fw-pricelist">
+
+                <!-- Model & options -->
+                <div class="card mt-6">
+                  <div class="card-header">
+                    <div class="card-title">Model &amp; options</div>
+                    <div class="card-desc">Pick a FortiGate model straight from the price list, then the commercial options.</div>
+                  </div>
+                  <div class="card-content grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    <div class="grid gap-1.5">
+                      <label class="label" for="fwl-model">Model</label>
+                      <select id="fwl-model" class="select"></select>
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="fwl-units">Units of devices</label>
+                      <input id="fwl-units" type="number" min="1" value="1" class="input" />
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="fwl-years">License / MA term</label>
+                      <select id="fwl-years" class="select">
+                        <option value="1">1 year</option>
+                        <option value="3" selected>3 years</option>
+                        <option value="5">5 years</option>
+                      </select>
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="fwl-sla">SLA tier</label>
+                      <select id="fwl-sla" class="select">
+                        <option value="nbd" selected>NBD (Next Business Day)</option>
+                        <option value="8x5x4">8&times;5&times;4</option>
+                        <option value="24x7x4">24&times;7&times;4</option>
+                      </select>
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="fwl-sow">SOW scope (implementation)</label>
+                      <select id="fwl-sow" class="select">
+                        <option value="basic">Basic &mdash; swap &amp; config</option>
+                        <option value="standard" selected>Standard &mdash; migrate policies + HA</option>
+                        <option value="complex">Complex &mdash; full redesign + integration</option>
+                      </select>
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="fwl-location">Location</label>
+                      <select id="fwl-location" class="select">
+                        <option value="bkk" selected>Bangkok / metro</option>
+                        <option value="upcountry">Upcountry</option>
+                      </select>
+                    </div>
+                    <label class="flex items-center gap-2 self-end pb-2 text-sm" for="fwl-adv">
+                      <input id="fwl-adv" type="checkbox" class="h-4 w-4 rounded border-border accent-brand-navy" />
+                      Advanced replacement (RMA)
+                    </label>
+                    <label class="flex items-center gap-2 self-end pb-2 text-sm" for="fwl-site">
+                      <input id="fwl-site" type="checkbox" class="h-4 w-4 rounded border-border accent-brand-navy" checked />
+                      Include site preparation
+                    </label>
+                  </div>
+                </div>
+
+                <!-- Result -->
+                <div class="mt-6 flex flex-wrap items-baseline justify-between gap-2">
+                  <h2 class="text-lg font-semibold tracking-tight">Quotation</h2>
+                  <span class="text-xs text-muted-foreground">THB &middot; incl. 20% buffer</span>
+                </div>
+                <div id="fwl-summary" class="mt-3 grid gap-4 sm:grid-cols-2"></div>
+              </div><!-- /panel fw-pricelist -->
             </div><!-- /tabs -->
           </section>
 

@@ -1,0 +1,84 @@
+  <!-- ===================== Router / SD-WAN — Replacement ===================== -->
+  <script>
+    /**
+     * Router / SD-WAN — Replacement. Pick the existing edge device → mapped to a bandwidth
+     * tier → sized like-for-like (or better) from the same catalog. MOCK DATA + MOCK PRICING,
+     * same window.PRICING seam and pricing as the New install flow.
+     */
+    (function () {
+      var P  = window.PRICING || {};
+      var PX = P.router || {};
+      var CATALOG = PX.catalog || {
+        fortinet: { low: { model: 'FortiGate 40F', hw: 22000 }, mid: { model: 'FortiGate 80F', hw: 45000 }, high: { model: 'FortiGate 100F', hw: 95000 } },
+        cisco:    { low: { model: 'Meraki MX68', hw: 28000 },   mid: { model: 'Meraki MX85', hw: 60000 },   high: { model: 'Meraki MX95', hw: 120000 } }
+      };
+      var EXISTING = PX.existing || [
+        { id: 'isr4321', label: 'Cisco ISR 4321',         bw: 'low'  },
+        { id: 'isr4331', label: 'Cisco ISR 4331',         bw: 'mid'  },
+        { id: 'isr4351', label: 'Cisco ISR 4351',         bw: 'high' },
+        { id: 'mx67',    label: 'Meraki MX67',            bw: 'low'  },
+        { id: 'mx84',    label: 'Meraki MX84',            bw: 'mid'  },
+        { id: 'fg60f',   label: 'FortiGate 60F (SD-WAN)', bw: 'mid'  }
+      ];
+      var META = { fortinet: { name: 'Fortinet Secure SD-WAN', icon: 'route' }, cisco: { name: 'Cisco Meraki SD-WAN', icon: 'route' } };
+      var SDWAN_YR = PX.sdwan_yr || { fortinet: 9000, cisco: 14000 };
+      var BW_LABEL = { low: '≤100 Mbps', mid: '≤500 Mbps', high: '≤1 Gbps' };
+      var IMPL_BASE = (P.implementation && P.implementation.router) || { basic: 30000, standard: 70000, complex: 150000 };
+      var SLA_MULT = (P.multipliers && P.multipliers.sla)      || { nbd: 1.0, '8x5x4': 1.25, '24x7x4': 1.6 };
+      var LOC_MULT = (P.multipliers && P.multipliers.location) || { bkk: 1.0, upcountry: 1.18 };
+      var SLA_LABEL = { nbd: 'NBD', '8x5x4': '8×5×4', '24x7x4': '24×7×4' };
+      var BUFFER = (P.knobs && P.knobs.buffer != null) ? P.knobs.buffer : 1.20;
+      var thb = function (n) { return '฿' + Math.round(n).toLocaleString('en-US'); };
+      var round1k = function (n) { return Math.round(n / 1000) * 1000; };
+      var el = function (id) { return document.getElementById(id); };
+
+      var modelEl = el('rtrr-model');
+      if (!modelEl) return;
+      function existing() { var id = modelEl.value; return EXISTING.filter(function (e) { return e.id === id; })[0] || EXISTING[0]; }
+
+      function priceOption(family, inp) {
+        var m = CATALOG[family][inp.bw];
+        var device = m.hw * inp.sites;
+        var lic = SDWAN_YR[family] * inp.sites * inp.years * SLA_MULT[inp.sla];
+        var impl = IMPL_BASE[inp.sow] * LOC_MULT[inp.location];
+        return { model: m.model, device: device, lic: lic, impl: impl, total: round1k((device + lic + impl) * BUFFER) };
+      }
+      function readInputs() {
+        return { bw: existing().bw, sites: Math.max(1, parseInt(el('rtrr-sites').value, 10) || 1),
+                 sow: el('rtrr-sow').value, years: parseInt(el('rtrr-years').value, 10), sla: el('rtrr-sla').value, location: el('rtrr-location').value };
+      }
+      function row(label, value) { return '<div class="flex justify-between"><span class="text-muted-foreground">' + label + '</span><span class="tabular-nums">' + value + '</span></div>'; }
+      function cardHtml(family, r, inp, recommended) {
+        return '<div class="card flex flex-col' + (recommended ? ' ring-2 ring-brand-orange' : '') + '" data-vendor="' + family + '">' +
+          '<div class="card-header"><div class="flex items-start justify-between gap-2"><div class="flex items-center gap-2">' +
+          '<i data-lucide="' + META[family].icon + '" class="h-4 w-4 text-brand-navy"></i><div class="card-title">' + META[family].name + '</div></div>' +
+          (recommended ? '<span class="badge badge-brand">Best value</span>' : '') + '</div>' +
+          '<div class="card-desc pt-0.5">' + r.model + ' × ' + inp.sites + '</div>' +
+          '<div class="flex items-center gap-2 pt-1"><span class="badge badge-secondary">' + inp.sites + ' devices</span>' +
+          '<span class="text-xs text-muted-foreground">' + BW_LABEL[inp.bw] + '</span></div></div>' +
+          '<div class="card-content flex-1 space-y-1.5 text-sm">' +
+          row('Edge devices (' + inp.sites + ')', thb(r.device)) +
+          row('SD-WAN license + support · ' + inp.years + ' yr · ' + SLA_LABEL[inp.sla], thb(r.lic)) +
+          row('Implementation', thb(r.impl)) + '</div>' +
+          '<div class="mt-auto flex flex-col gap-3 border-t border-border p-6 pt-4"><div class="flex items-baseline justify-between">' +
+          '<span class="text-sm text-muted-foreground">Est. total</span><span class="text-xl font-semibold text-brand-navy tabular-nums">' + thb(r.total) + '</span></div>' +
+          '<button class="btn btn-primary w-full" data-select="' + family + '">Add to estimate</button></div></div>';
+      }
+      function render() {
+        var inp = readInputs();
+        el('rtrr-detected').textContent = BW_LABEL[inp.bw] + ' class';
+        var families = ['fortinet', 'cisco'];
+        var results = families.map(function (f) { return { f: f, r: priceOption(f, inp) }; });
+        var cheapest = results.reduce(function (a, b) { return b.r.total < a.r.total ? b : a; });
+        el('rtrr-options').innerHTML = results.map(function (x) { return cardHtml(x.f, x.r, inp, x === cheapest); }).join('');
+        lucide.createIcons();
+      }
+      function init() {
+        modelEl.innerHTML = EXISTING.map(function (e) { return '<option value="' + e.id + '">' + e.label + '</option>'; }).join('');
+        document.querySelectorAll('#rtrr-model, #rtrr-sites, #rtrr-sow, #rtrr-years, #rtrr-sla, #rtrr-location')
+          .forEach(function (n) { n.addEventListener('input', render); });
+        render();
+      }
+      init();
+    })();
+  </script>

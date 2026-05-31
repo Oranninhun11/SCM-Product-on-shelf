@@ -13,11 +13,16 @@
 
             <div class="mt-5" data-tabs>
               <div class="tablist">
-                <button class="tab active" data-tab="bk-new">New / Expand</button>
+                <button class="tab active" data-tab="backup-pricelist">Price list</button>
+                <button class="tab" data-tab="bk-new">New / Expand</button>
               </div>
 
-              <!-- Project: New / Expand (Veeam / Commvault) -->
-              <div class="mt-5" data-panel="bk-new">
+              <!-- Project: Price list (pick a SKU) -->
+              <div class="mt-5" data-panel="backup-pricelist">
+                <div data-pricelist="backup"></div>
+              </div>
+
+              <div class="mt-5 hidden" data-panel="bk-new">
 
                 <!-- Requirements -->
                 <div class="card mt-6">

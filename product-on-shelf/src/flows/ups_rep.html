@@ -1,0 +1,87 @@
+  <!-- ===================== UPS / Power — Replacement ===================== -->
+  <script>
+    /**
+     * UPS / Power — Replacement. Pick the existing UPS → mapped to a kVA load → sized
+     * like-for-like (or better) from the same catalog. MOCK DATA + MOCK PRICING, same
+     * window.PRICING seam and pricing as the New install flow.
+     */
+    (function () {
+      var P  = window.PRICING || {};
+      var PX = P.ups || {};
+      var CATALOG = PX.catalog || {
+        apc: [{ kva: 3, model: 'Smart-UPS SRT 3000', hw: 65000 }, { kva: 6, model: 'Smart-UPS SRT 6000', hw: 120000 }, { kva: 10, model: 'Symmetra 10kVA', hw: 280000 }, { kva: 20, model: 'Symmetra 20kVA', hw: 480000 }],
+        vertiv: [{ kva: 3, model: 'Liebert GXT5 3kVA', hw: 58000 }, { kva: 6, model: 'Liebert GXT5 6kVA', hw: 110000 }, { kva: 10, model: 'Liebert APM 10kVA', hw: 260000 }, { kva: 20, model: 'Liebert APM 20kVA', hw: 450000 }]
+      };
+      var EXISTING = PX.existing || [
+        { id: 'smt1500', label: 'APC Smart-UPS 1500',       kva: 1.5 },
+        { id: 'srt3000', label: 'APC Smart-UPS SRT 3000',   kva: 3 },
+        { id: 'srt6000', label: 'APC Smart-UPS SRT 6000',   kva: 6 },
+        { id: 'sym8',    label: 'APC Symmetra 8kVA',        kva: 8 },
+        { id: 'gxt5_3',  label: 'Vertiv Liebert GXT5 3kVA', kva: 3 },
+        { id: 'apm10',   label: 'Vertiv Liebert APM 10kVA', kva: 10 }
+      ];
+      var META = { apc: { name: 'APC by Schneider', icon: 'battery-charging' }, vertiv: { name: 'Vertiv Liebert', icon: 'battery-charging' } };
+      var RUNTIME_MULT = PX.runtime_mult || { '5': 1.0, '10': 1.3, '30': 2.0 };
+      var SUPPORT_RATE = PX.support_rate || { apc: 0.12, vertiv: 0.11 };
+      var IMPL_BASE = (P.implementation && P.implementation.ups) || { basic: 30000, standard: 70000, complex: 150000 };
+      var SLA_MULT = (P.multipliers && P.multipliers.sla)      || { nbd: 1.0, '8x5x4': 1.25, '24x7x4': 1.6 };
+      var LOC_MULT = (P.multipliers && P.multipliers.location) || { bkk: 1.0, upcountry: 1.18 };
+      var SLA_LABEL = { nbd: 'NBD', '8x5x4': '8×5×4', '24x7x4': '24×7×4' };
+      var BUFFER = (P.knobs && P.knobs.buffer != null) ? P.knobs.buffer : 1.20;
+      var thb = function (n) { return '฿' + Math.round(n).toLocaleString('en-US'); };
+      var round1k = function (n) { return Math.round(n / 1000) * 1000; };
+      var el = function (id) { return document.getElementById(id); };
+
+      var modelEl = el('upsr-model');
+      if (!modelEl) return;
+      function existing() { var id = modelEl.value; return EXISTING.filter(function (e) { return e.id === id; })[0] || EXISTING[0]; }
+      function pickModel(family, kva) { var l = CATALOG[family]; for (var i = 0; i < l.length; i++) { if (l[i].kva >= kva) return l[i]; } return l[l.length - 1]; }
+
+      function priceOption(family, inp) {
+        var m = pickModel(family, inp.kva);
+        var redun = inp.redundancy === 'n1' ? 2 : 1;
+        var qty = redun * inp.units;
+        var device = m.hw * RUNTIME_MULT[inp.runtime] * qty;
+        var support = device * SUPPORT_RATE[family] * inp.years * SLA_MULT[inp.sla];
+        var impl = IMPL_BASE[inp.sow] * LOC_MULT[inp.location];
+        return { model: m, redun: redun, qty: qty, device: device, support: support, impl: impl, total: round1k((device + support + impl) * BUFFER) };
+      }
+      function readInputs() {
+        return { kva: existing().kva, units: Math.max(1, parseInt(el('upsr-units').value, 10) || 1), runtime: el('upsr-runtime').value, redundancy: el('upsr-redundancy').value,
+                 sow: el('upsr-sow').value, years: parseInt(el('upsr-years').value, 10), sla: el('upsr-sla').value, location: el('upsr-location').value };
+      }
+      function row(label, value) { return '<div class="flex justify-between"><span class="text-muted-foreground">' + label + '</span><span class="tabular-nums">' + value + '</span></div>'; }
+      function cardHtml(family, r, inp, recommended) {
+        return '<div class="card flex flex-col' + (recommended ? ' ring-2 ring-brand-orange' : '') + '" data-vendor="' + family + '">' +
+          '<div class="card-header"><div class="flex items-start justify-between gap-2"><div class="flex items-center gap-2">' +
+          '<i data-lucide="' + META[family].icon + '" class="h-4 w-4 text-brand-navy"></i><div class="card-title">' + META[family].name + '</div></div>' +
+          (recommended ? '<span class="badge badge-brand">Best value</span>' : '') + '</div>' +
+          '<div class="card-desc pt-0.5">' + r.model.model + (r.qty > 1 ? ' ×' + r.qty : '') + (r.redun > 1 ? ' (N+1)' : '') + '</div>' +
+          '<div class="flex items-center gap-2 pt-1"><span class="badge badge-secondary">' + r.model.kva + ' kVA</span>' +
+          '<span class="text-xs text-muted-foreground">' + inp.runtime + ' min · ' + inp.units + ' × ' + (r.redun > 1 ? 'N+1' : 'single') + '</span></div></div>' +
+          '<div class="card-content flex-1 space-y-1.5 text-sm">' +
+          row('UPS' + (r.qty > 1 ? ' (' + r.qty + '×)' : ''), thb(r.device)) +
+          row('Support · ' + inp.years + ' yr · ' + SLA_LABEL[inp.sla], thb(r.support)) +
+          row('Implementation', thb(r.impl)) + '</div>' +
+          '<div class="mt-auto flex flex-col gap-3 border-t border-border p-6 pt-4"><div class="flex items-baseline justify-between">' +
+          '<span class="text-sm text-muted-foreground">Est. total</span><span class="text-xl font-semibold text-brand-navy tabular-nums">' + thb(r.total) + '</span></div>' +
+          '<button class="btn btn-primary w-full" data-select="' + family + '">Add to estimate</button></div></div>';
+      }
+      function render() {
+        var inp = readInputs();
+        el('upsr-detected').textContent = inp.kva + ' kVA load';
+        var families = ['apc', 'vertiv'];
+        var results = families.map(function (f) { return { f: f, r: priceOption(f, inp) }; });
+        var cheapest = results.reduce(function (a, b) { return b.r.total < a.r.total ? b : a; });
+        el('upsr-options').innerHTML = results.map(function (x) { return cardHtml(x.f, x.r, inp, x === cheapest); }).join('');
+        lucide.createIcons();
+      }
+      function init() {
+        modelEl.innerHTML = EXISTING.map(function (e) { return '<option value="' + e.id + '">' + e.label + '</option>'; }).join('');
+        document.querySelectorAll('#upsr-model, #upsr-units, #upsr-runtime, #upsr-redundancy, #upsr-sow, #upsr-years, #upsr-sla, #upsr-location')
+          .forEach(function (n) { n.addEventListener('input', render); });
+        render();
+      }
+      init();
+    })();
+  </script>

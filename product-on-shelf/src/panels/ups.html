@@ -11,8 +11,89 @@
               <span class="badge badge-secondary shrink-0">Mock pricing</span>
             </div>
             <div class="mt-5" data-tabs>
-              <div class="tablist"><button class="tab active" data-tab="ups-new">New / Expand</button></div>
-              <div class="mt-5" data-panel="ups-new">
+              <div class="tablist">
+                <button class="tab active" data-tab="ups-pricelist">Price list</button>
+                <button class="tab" data-tab="ups-rep">Replacement</button>
+                <button class="tab" data-tab="ups-new">New install</button>
+              </div>
+
+              <!-- Project: Price list (pick a SKU) -->
+              <div class="mt-5" data-panel="ups-pricelist">
+                <div data-pricelist="ups"></div>
+              </div>
+
+              <div class="mt-5 hidden" data-panel="ups-rep">
+                <div class="card mt-6">
+                  <div class="card-header"><div class="card-title">Requirements</div></div>
+                  <div class="card-content grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    <div class="grid gap-1.5">
+                      <label class="label" for="upsr-model">Existing model</label>
+                      <select id="upsr-model" class="select"></select>
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label">Detected</label>
+                      <div id="upsr-detected" class="input flex items-center bg-muted/40 text-muted-foreground">&mdash;</div>
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="upsr-units">Units of devices</label>
+                      <input id="upsr-units" type="number" min="1" value="1" class="input" />
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="upsr-runtime">Runtime</label>
+                      <select id="upsr-runtime" class="select">
+                        <option value="5">5 min</option>
+                        <option value="10" selected>10 min</option>
+                        <option value="30">30 min</option>
+                      </select>
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="upsr-redundancy">Redundancy</label>
+                      <select id="upsr-redundancy" class="select">
+                        <option value="single" selected>Single</option>
+                        <option value="n1">N+1</option>
+                      </select>
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="upsr-sow">SOW scope</label>
+                      <select id="upsr-sow" class="select">
+                        <option value="basic">Basic &mdash; swap &amp; commission</option>
+                        <option value="standard" selected>Standard &mdash; + monitoring card</option>
+                        <option value="complex">Complex &mdash; + EPO / generator tie-in</option>
+                      </select>
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="upsr-years">Support term</label>
+                      <select id="upsr-years" class="select">
+                        <option value="1">1 year</option>
+                        <option value="3" selected>3 years</option>
+                        <option value="5">5 years</option>
+                      </select>
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="upsr-sla">SLA tier</label>
+                      <select id="upsr-sla" class="select">
+                        <option value="nbd" selected>NBD (Next Business Day)</option>
+                        <option value="8x5x4">8&times;5&times;4</option>
+                        <option value="24x7x4">24&times;7&times;4</option>
+                      </select>
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="upsr-location">Location</label>
+                      <select id="upsr-location" class="select">
+                        <option value="bkk" selected>Bangkok / metro</option>
+                        <option value="upcountry">Upcountry</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+                <div class="mt-6 flex flex-wrap items-baseline justify-between gap-2">
+                  <h2 class="text-lg font-semibold tracking-tight">Replacement options</h2>
+                  <span class="text-xs text-muted-foreground">THB &middot; incl. 20% buffer &middot; matched to existing kVA</span>
+                </div>
+                <div id="upsr-options" class="mt-3 grid gap-4 sm:grid-cols-2"></div>
+              </div><!-- /panel ups-rep -->
+
+              <div class="mt-5 hidden" data-panel="ups-new">
                 <div class="card mt-6">
                   <div class="card-header"><div class="card-title">Requirements</div></div>
                   <div class="card-content grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

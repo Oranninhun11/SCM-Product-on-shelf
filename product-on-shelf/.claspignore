@@ -1,0 +1,10 @@
+# Pushed to Apps Script: server files, the index include-manifest, and the src/ partials
+# (each src/*.html becomes a separate file in the Apps Script editor). Everything else
+# (build.py, preview.html, docs, xlsx, caches) stays local.
+**/**
+!appsscript.json
+!Code.gs
+!Setup.gs
+!Ingest_Email.gs
+!index.html
+!src/**/*.html

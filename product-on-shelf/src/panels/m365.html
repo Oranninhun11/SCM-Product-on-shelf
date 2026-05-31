@@ -11,8 +11,13 @@
               <span class="badge badge-secondary shrink-0">Mock pricing</span>
             </div>
             <div class="mt-5" data-tabs>
-              <div class="tablist"><button class="tab active" data-tab="m365-lic">Licensing</button></div>
-              <div class="mt-5" data-panel="m365-lic">
+              <div class="tablist">
+                <button class="tab active" data-tab="m365-pricelist">Price list</button><button class="tab" data-tab="m365-lic">Licensing</button></div>
+              <div class="mt-5" data-panel="m365-pricelist">
+                <div data-pricelist="m365"></div>
+              </div>
+
+              <div class="mt-5 hidden" data-panel="m365-lic">
                 <div class="card mt-6">
                   <div class="card-header"><div class="card-title">Requirements</div></div>
                   <div class="card-content grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

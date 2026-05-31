@@ -19,6 +19,32 @@ Every option card has an **Add to estimate** button that feeds a shared **Custom
 deal can be bundled into a single quote. Any unbuilt project renders a "coming soon" placeholder via
 the `data-soon` filler.
 
+### Editing — source layout & build
+
+The `src/` partials are pushed to Apps Script as **separate files** (each `src/*.html` shows as
+its own file in the editor). `index.html` is a **generated include-manifest — do not edit it
+directly** (the next build overwrites it): 55 `<?!= include('src/…') ?>` lines in load order.
+Code.gs serves it via `HtmlService.createTemplateFromFile('index').evaluate()`, so the includes
+stitch the partials back together at request time. Edit the partials under `src/`, then:
+
+```
+python3 build.py            # regenerate index.html (include manifest) from src/ + MANIFEST
+python3 build.py && npx @google/clasp push   # then deploy: npx @google/clasp deploy --deploymentId <id>
+```
+
+`src/` is split by concern, included in load-order by the MANIFEST in `build.py`:
+- `00_head.html`, `01_shell_top.html`, `02_shell_bottom.html`, `99_foot.html` — head/style + app shell.
+- `src/panels/<view>.html` — one `<section data-view="…">` markup panel per screen.
+- `src/flows/<flow>.html` — one `<script>` IIFE per flow; `_core` (router), `_navdrawer`, `_cart`
+  (`window.PoSEstimate`), `_quote` load **first** (flow IIFEs depend on them), so manifest order matters.
+
+You add or remove a partial in the MANIFEST (single source of truth for order); `build.py`
+regenerates both the manifest and, on demand, a preview. Because `index.html` is now a template
+of `<?!=…?>` scriptlets it no longer renders by opening it in a browser — for local preview run
+`python3 build.py --preview` and open the generated `preview.html` (concatenated monolith, local
+only, not pushed). The preview is byte-identical to the served output. ⚠️ The SCM logo is
+base64-inlined in `00_head.html` — edit that file surgically.
+
 ## Status
 
 **Phase 1 — web shell / design system ✅**
@@ -147,21 +173,24 @@ When the real source lands, replace each function's inputs with data fetched ser
 
 | File | Role |
 |------|------|
-| `index.html` | The entire Phase 1 app. Self-contained so it renders in a browser **and** drops into HTML Service unchanged. |
-| `logo.png` | SCM B2B org logo (source of truth). Inlined as base64 into `index.html` so it works in HTML Service too. |
-| `Code.gs` | Apps Script entry point — `doGet()` serves `index.html`. |
+| `index.html` | Generated include-manifest: `<?!= include('src/…') ?>` lines that stitch the partials together. Served as a template. **Do not edit — regenerate via `build.py`.** |
+| `src/**/*.html` | The editable source, split by concern. Each is pushed as its own Apps Script file (`src/panels/home`, `src/flows/hci`, …). |
+| `logo.png` | SCM B2B org logo (source of truth). Inlined as base64 into `src/00_head.html` so it works in HTML Service too. |
+| `Code.gs` | Apps Script entry point — `doGet()` evaluates the `index` template; `include()` inlines each partial. |
 | `appsscript.json` | Manifest. Web app, `access: DOMAIN` (Workspace-internal), timezone Asia/Bangkok. |
 | `.clasp.json.example` | Template for the clasp config created at deploy time. |
 
 ## Preview locally
 
-No build step, no auth — just open the file:
+`index.html` is now a template (scriptlets don't render in a plain browser), so build the
+concatenated monolith and open that instead:
 
 ```sh
-open index.html          # macOS default browser
+python3 build.py --preview   # writes preview.html (local only, not pushed)
+open preview.html            # macOS default browser
 ```
 
-Iterate on `index.html` and refresh. Tailwind + icons load from CDN.
+Edit partials under `src/`, rerun `--preview`, refresh. Tailwind + icons load from CDN.
 
 ## Deploy to Workspace (when the look is approved)
 
@@ -181,10 +210,10 @@ clasp deploy
   hand-written to match the shadcn aesthetic (real shadcn/ui is React + a build step).
   The CDN prints a "not for production" console warning — acceptable for an internal tool;
   the production path is to pre-compile the CSS and inline it.
-- **Single HTML file (for now).** The canonical Apps Script split (`index` + `<?!= include() ?>`
-  partials) needs server-side templating, which doesn't render in a plain browser. We keep one
-  file for a fast local loop and switch to templating in Phase 2 when we pass server data in —
-  see the note in `Code.gs`.
+- **Split into partials (`index` + `<?!= include() ?>`).** The source lives under `src/` as
+  separate files (readable in the Apps Script editor); `index.html` is a generated manifest that
+  the server templates back together. The cost is that `index.html` no longer renders by opening
+  it in a browser — `build.py --preview` regenerates a browser-openable monolith for the local loop.
 - **Brand palette (SCM B2B).** Navy `#1f2a4d` (`--brand-navy`, also the `--primary`) for buttons,
   active text and focus; orange `#f15a28` (`--brand-orange`) as the single accent — logo, "Phase"
   badge, active-nav icon, card hover. Neutral shadcn base everywhere else keeps it minimal.

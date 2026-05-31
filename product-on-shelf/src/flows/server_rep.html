@@ -1,0 +1,86 @@
+  <!-- ===================== Standalone Server — Replacement ===================== -->
+  <script>
+    /**
+     * Standalone Server — Replacement. Pick the existing server → mapped to a socket count →
+     * carry over RAM / disk and size the refresh from the same catalog. MOCK DATA + MOCK
+     * PRICING, same window.PRICING seam and pricing as the New install flow.
+     */
+    (function () {
+      var P  = window.PRICING || {};
+      var PX = P.server || {};
+      var BASE = PX.base || {
+        dell: { 1: { model: 'PowerEdge R660', hw: 180000 }, 2: { model: 'PowerEdge R760', hw: 280000 } },
+        hpe:  { 1: { model: 'ProLiant DL360 Gen11', hw: 175000 }, 2: { model: 'ProLiant DL380 Gen11', hw: 275000 } }
+      };
+      var EXISTING = PX.existing || [
+        { id: 'r440',     label: 'Dell PowerEdge R440',      sockets: '1' },
+        { id: 'r640',     label: 'Dell PowerEdge R640',      sockets: '2' },
+        { id: 'r740',     label: 'Dell PowerEdge R740',      sockets: '2' },
+        { id: 'dl360g10', label: 'HPE ProLiant DL360 Gen10', sockets: '1' },
+        { id: 'dl380g10', label: 'HPE ProLiant DL380 Gen10', sockets: '2' }
+      ];
+      var META = { dell: { name: 'Dell PowerEdge', icon: 'server' }, hpe: { name: 'HPE ProLiant', icon: 'server' } };
+      var RAM_RATE = (P.knobs && P.knobs.server_ram_rate != null) ? P.knobs.server_ram_rate : 900,
+          DISK_RATE = (P.knobs && P.knobs.server_disk_rate != null) ? P.knobs.server_disk_rate : 9000;
+      var SUPPORT_YR = PX.support_yr || { dell: 22000, hpe: 21000 };
+      var IMPL_BASE = (P.implementation && P.implementation.server) || { basic: 40000, standard: 90000, complex: 180000 };
+      var SLA_MULT = (P.multipliers && P.multipliers.sla)      || { nbd: 1.0, '8x5x4': 1.25, '24x7x4': 1.6 };
+      var LOC_MULT = (P.multipliers && P.multipliers.location) || { bkk: 1.0, upcountry: 1.18 };
+      var SLA_LABEL = { nbd: 'NBD', '8x5x4': '8×5×4', '24x7x4': '24×7×4' };
+      var BUFFER = (P.knobs && P.knobs.buffer != null) ? P.knobs.buffer : 1.20;
+      var thb = function (n) { return '฿' + Math.round(n).toLocaleString('en-US'); };
+      var round1k = function (n) { return Math.round(n / 1000) * 1000; };
+      var el = function (id) { return document.getElementById(id); };
+
+      var modelEl = el('srvr-model');
+      if (!modelEl) return;
+      function existing() { var id = modelEl.value; return EXISTING.filter(function (e) { return e.id === id; })[0] || EXISTING[0]; }
+
+      function priceOption(family, inp) {
+        var b = BASE[family][inp.sockets];
+        var perServer = b.hw + inp.ram * RAM_RATE + inp.disk * DISK_RATE;
+        var device = perServer * inp.qty;
+        var support = SUPPORT_YR[family] * inp.qty * inp.years * SLA_MULT[inp.sla];
+        var impl = IMPL_BASE[inp.sow] * LOC_MULT[inp.location];
+        return { model: b.model, device: device, support: support, impl: impl, total: round1k((device + support + impl) * BUFFER) };
+      }
+      function readInputs() {
+        return { sockets: existing().sockets, qty: Math.max(1, parseInt(el('srvr-qty').value, 10) || 1),
+                 ram: Math.max(1, parseInt(el('srvr-ram').value, 10) || 1), disk: Math.max(1, parseFloat(el('srvr-disk').value) || 1),
+                 sow: el('srvr-sow').value, years: parseInt(el('srvr-years').value, 10), sla: el('srvr-sla').value, location: el('srvr-location').value };
+      }
+      function row(label, value) { return '<div class="flex justify-between"><span class="text-muted-foreground">' + label + '</span><span class="tabular-nums">' + value + '</span></div>'; }
+      function cardHtml(family, r, inp, recommended) {
+        return '<div class="card flex flex-col' + (recommended ? ' ring-2 ring-brand-orange' : '') + '" data-vendor="' + family + '">' +
+          '<div class="card-header"><div class="flex items-start justify-between gap-2"><div class="flex items-center gap-2">' +
+          '<i data-lucide="' + META[family].icon + '" class="h-4 w-4 text-brand-navy"></i><div class="card-title">' + META[family].name + '</div></div>' +
+          (recommended ? '<span class="badge badge-brand">Best value</span>' : '') + '</div>' +
+          '<div class="card-desc pt-0.5">' + r.model + '</div>' +
+          '<div class="flex items-center gap-2 pt-1"><span class="badge badge-secondary">' + inp.qty + ' × ' + inp.sockets + 'S</span>' +
+          '<span class="text-xs text-muted-foreground">' + inp.ram + 'GB · ' + inp.disk + 'TB ea</span></div></div>' +
+          '<div class="card-content flex-1 space-y-1.5 text-sm">' +
+          row('Servers (' + inp.qty + '×)', thb(r.device)) +
+          row('Support · ' + inp.years + ' yr · ' + SLA_LABEL[inp.sla], thb(r.support)) +
+          row('Implementation', thb(r.impl)) + '</div>' +
+          '<div class="mt-auto flex flex-col gap-3 border-t border-border p-6 pt-4"><div class="flex items-baseline justify-between">' +
+          '<span class="text-sm text-muted-foreground">Est. total</span><span class="text-xl font-semibold text-brand-navy tabular-nums">' + thb(r.total) + '</span></div>' +
+          '<button class="btn btn-primary w-full" data-select="' + family + '">Add to estimate</button></div></div>';
+      }
+      function render() {
+        var inp = readInputs();
+        el('srvr-detected').textContent = inp.sockets + '-socket class';
+        var families = ['dell', 'hpe'];
+        var results = families.map(function (f) { return { f: f, r: priceOption(f, inp) }; });
+        var cheapest = results.reduce(function (a, b) { return b.r.total < a.r.total ? b : a; });
+        el('srvr-options').innerHTML = results.map(function (x) { return cardHtml(x.f, x.r, inp, x === cheapest); }).join('');
+        lucide.createIcons();
+      }
+      function init() {
+        modelEl.innerHTML = EXISTING.map(function (e) { return '<option value="' + e.id + '">' + e.label + '</option>'; }).join('');
+        document.querySelectorAll('#srvr-model, #srvr-qty, #srvr-ram, #srvr-disk, #srvr-sow, #srvr-years, #srvr-sla, #srvr-location')
+          .forEach(function (n) { n.addEventListener('input', render); });
+        render();
+      }
+      init();
+    })();
+  </script>
