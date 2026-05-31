@@ -566,3 +566,87 @@ keeps running on its existing Gmail/Sheets auth, untouched.
 > Resume: `/oran-software-engineer` on `product-on-shelf-app`. If #1/#2 verified, next is the READ path
 > (`Code.gs doGet` → inject `window.PRICING` from `Price`, Firewall first) — the last thing between the
 > app and real prices. Then the template-fill quotation export.
+
+---
+
+# Handoff — Product on Shelf (cont.)
+_Session: 2026-06-01 · software-engineer mode · scoped commit + multi-brand aliases + one-time price-mail discovery_
+
+## Stage
+`Ingest_Email.gs` ingestion deepened. **#1/#2 verified live==local** (clasp pull + byte-diff: 67 files,
+0 differ). Diagnosed "Price only has Cisco", extended `ALIAS_SEED` to multi-brand, and built a **one-time
+comprehensive price-mail fetch** (`discoverAllPriceMail()`). All pushed. **First-ever scoped commit of the
+app landed** (`8b2996b`). Read path still unwired (app serves mock `DEFAULTS`).
+
+## Built / done this session
+- **Scoped commit `8b2996b`** (branch `product-on-shelf-app`, 41 files, `product-on-shelf/` ONLY) — ingestion
+  + rebuilt panels + new `_rep`/`_pricelist` flow partials + DB artifacts + `Flow diagram/` + docs.
+  Gitignored the real `.clasp.json` (live scriptId stays local; `.clasp.json.example` is the placeholder)
+  and `_demo-filled-template.xlsx` (throwaway). Unrelated `.claude/` SCM changes deliberately left untouched.
+- **Verified Apps Script == local** — `clasp pull` into a temp dir + diff every pushed file: SAME across
+  3 `.gs` + `appsscript.json` + `index.html` + 62 `src/*.html` (67 total).
+- **Diagnosed "Price = Cisco only"** by reading the live DB sheet (`1kzKWvaJN7z7…`): `Price` has just **6
+  Cisco rows** (written in the FIRST backfill, `upserted 6`); every run since reads `upserted 0` because
+  the **`_alias` `sku_key` column is all blank** — the mappings were wiped and **`seedAliases()` has not
+  been re-run** (5 backfills, all 0). Other brands (Fortinet/Aruba/Veeam/Allied-Telesis) ARE arriving
+  (fetch #1 works — scans jumped 50→405) but sit unmapped in `_alias`, so nothing writes. **Fetch is not
+  the problem; the `_alias` mapping gate is.**
+- **Extended `ALIAS_SEED` (+20, pushed)** — Fortinet (`firewall:fortinet:*` FG-70G AR + FortiCloud),
+  Aruba ClearPass (`nac:aruba:*`), Cisco 9300X (`switch:cisco:c9300x-*`), Allied-Telesis x550 + transceivers
+  (`switch:alliedtelesis:*`). **Deliberately left Veeam `V-ESS*` unmapped** (maintenance/renewal/migration
+  artifacts, not catalog prices).
+- **`discoverAllPriceMail()` — one-time comprehensive fetch (pushed).** Widens BOTH filters vs the daily net:
+  search = domains OR `[EXT]` OR **price-intent subjects** (`INGEST.PRICE_SUBJECT_TERMS`, TH+EN: ขอราคา/
+  เสนอราคา/quotation/price/RFQ…); per-message gate = **any inbound** non-SCM message (the `broadGate` opt).
+  Window `DISCOVER_MONTHS=12`. **Resumable**: 400 threads/run (`DISCOVER_THREADS`), walks older via an
+  `email_discover_before` date cursor (`ymdPlusDays_` +1-day boundary, dedupe-safe); gated by
+  `email_discover_done`. New fns: `discoverAllPriceMail()`, `resetDiscover()`, `priceSubjectClause_()`,
+  `ymdPlusDays_()`; `sourceClause_(broad)`/`buildQuery_(window, broad)` gained the additive broad arg;
+  `runIngest_(query, mode, opts)` gained `broadGate`/`cap` + tracks `threadsFetched`/`oldestYmd`.
+  Daily/backfill paths **byte-unchanged** (broad defaults off). Verified: syntax + node unit-test of the
+  query strings (narrow unchanged, broad well-formed, cursor +1-day/month-roll correct). Can't run GAS.
+
+## Oran's manual GAS steps (the actual unlock — Claude can't run GAS / Google is read-only)
+1. **`seedAliases()`** — fills blank `sku_key` for all seeded brands (Cisco + Veeam DPP + Allied-Telesis
+   **+ Fortinet + Aruba + 9300X**). **Open `_alias` and confirm the column is now filled.** If it's STILL
+   blank after running → real bug in `seedAliases`, tell next session to hunt it.
+2. **`discoverAllPriceMail()`** — repeat until the log says **"Discovery COMPLETE"** (each says PARTIAL
+   while walking older; re-run is dedupe-safe). Fills `Price` for mapped parts, dumps the rest into `_alias`.
+3. Curate new `_alias` blanks → hand them to Claude → extend `ALIAS_SEED` + push → `seedAliases()` →
+   **`resetDiscover()` then `discoverAllPriceMail()`** to re-price history for the newly-mapped parts.
+
+## Open questions / risks
+- 🔴 **Read path STILL unwired** — app serves mock `DEFAULTS`; `Code.gs doGet` must inject `window.PRICING`
+  from the catalog `Price` tab (`DB_SCHEMA.md buildCatalog()`). Unchanged. The last thing before real prices.
+- 🟡 **`seedAliases()` un-run** is the current blocker to a multi-brand `Price` (see step 1). Strong evidence
+  it simply hasn't been run; if running it doesn't fill, it's a bug.
+- 🟡 **Discovery breadth vs runtime** — `price`/`ราคา` are broad; first sweep may need several re-runs. Trim
+  `PRICE_SUBJECT_TERMS` if too noisy. `DRY_RUN` preview optional (set back to false after).
+- 🟡 **Classification still rough** (`classifyPriceType_`) — e.g. Fortinet "Advance Replacement" and Veeam
+  "2yr" fall to `hw`/wrong type; alias still routes the right product, only the `price_type` label is off.
+  Offered to tighten the regex; not yet done.
+- 🟡 **Dead line `Ingest_Email.gs` `run.upserted;`** in `reconcile_` — harmless no-op; offered to drop.
+- 🟡 #2 xlsx parser still **dormant** until Oran enables the Drive advanced service + reauthorizes.
+- Working tree: this session's `Ingest_Email.gs` edits (aliases + discovery) are **pushed but NOT committed**
+  (commit `8b2996b` predates them). Commit when ready.
+
+## Decisions (the why)
+- **Discovery widens the per-message gate too, not just the search** — the gate is the hidden second filter;
+  leaving it narrow would silently drop every non-allowlisted vendor reply the broad search pulls in (the #1 trap).
+- **Broad is safe** — the `_alias` write-gate means breadth only adds blank `_alias` rows + runtime, never
+  bad prices in `Price`. So discovery casts wide on purpose.
+- **Separate `discoverAllPriceMail()`, not a widened daily** — daily must stay tight (no noise forever); the
+  broad sweep is a gated one-time op with its own done-flag + resume cursor.
+- **Resume via date cursor, not offset paging** — avoids Gmail deep-offset limits + premature-done; oldest
+  fetched day `+1` re-includes the boundary day (dedupe covers the overlap). Never advances during DRY_RUN.
+- **Left Veeam `V-ESS*` unmapped** — renewal/migration line items aren't representative catalog prices
+  (house rule: never write misleading prices).
+
+## References
+- `Ingest_Email.gs` (ingestion: domains #1, xlsx #2, discovery) · live DB `1kzKWvaJN7z7…` ·
+  `DB_SCHEMA.md` (`buildCatalog()` read-model feed) · `reference_product_on_shelf_deploy.md` (clasp v3).
+
+> Resume: `/oran-software-engineer` on `product-on-shelf-app`. Confirm `seedAliases()` + `discoverAllPriceMail()`
+> populated a multi-brand `Price`; curate `_alias` blanks (extend `ALIAS_SEED`). Then the READ path
+> (`Code.gs doGet` → inject `window.PRICING` from `Price`, Firewall parity first) — the last thing between
+> the app and real prices. Then the template-fill quotation export. Commit the uncommitted `Ingest_Email.gs` edits.

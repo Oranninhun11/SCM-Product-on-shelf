@@ -46,9 +46,20 @@ var INGEST = {
     'fortinet.com'                          // Fortinet
   ],
   USE_EXT_FALLBACK: true,                     // also include subject:[EXT] mail, OR-ed with the domain allowlist
+  // One-time comprehensive discovery (discoverAllPriceMail): ALSO match price-intent subjects (TH+EN)
+  // so vendor quotes that carry neither an allowlisted domain nor [EXT] are still found, and parse ANY
+  // inbound sender. Broad by design — safe because the _alias gate keeps Price clean (unmapped parts
+  // just queue blank for curation). Editable knob; add/remove terms to widen or tighten the net.
+  PRICE_SUBJECT_TERMS: [
+    'ขอราคา', 'เสนอราคา', 'ใบเสนอราคา', 'ราคา',           // TH: request price / offer price / quotation / price
+    'quotation', 'quote', 'pricelist', 'price', 'pricing',  // EN
+    'RFQ', 'request price'                                   // EN intent
+  ],
   DAILY_WINDOW: '2d',                         // daily overlap window; price_id dedupe makes it idempotent
-  BACKFILL_MONTHS: 9,                         // initial one-time backfill window
-  MAX_THREADS: 250,                           // cap per run (Gmail/exec-time safety; 250 sweeps ~9 mo in one shot)
+  BACKFILL_MONTHS: 9,                         // initial one-time (narrow) backfill window
+  DISCOVER_MONTHS: 12,                        // discoverAllPriceMail() comprehensive sweep window
+  MAX_THREADS: 250,                           // cap per run for daily/backfill (Gmail/exec-time safety)
+  DISCOVER_THREADS: 400,                      // cap per discovery run (≤500 Gmail max; cursor walks older across runs)
   TIME_BUDGET_MS: 4.5 * 60 * 1000,            // stop before the 6-min execution limit
   CHAT_WEBHOOK_URL: '',                       // paste the Google Chat incoming webhook; '' = skip notify
   TZ: 'Asia/Bangkok'
@@ -64,19 +75,31 @@ function distributorFromClause_() {
   return INGEST.DISTRIBUTOR_DOMAINS.length ? 'from:(' + INGEST.DISTRIBUTOR_DOMAINS.join(' OR ') + ')' : '';
 }
 
-/** Source filter: distributor domains OR-ed with the [EXT] tag (when USE_EXT_FALLBACK). */
-function sourceClause_() {
+/** Gmail OR-clause matching price-intent subjects (TH+EN); '' if none configured. Discovery only. */
+function priceSubjectClause_() {
+  var terms = (INGEST.PRICE_SUBJECT_TERMS || []).filter(String);
+  if (!terms.length) return '';
+  var quoted = terms.map(function (t) { return /\s/.test(t) ? '"' + t + '"' : t; });   // phrase-quote multi-word
+  return 'subject:(' + quoted.join(' OR ') + ')';
+}
+
+/**
+ * Source filter: distributor domains OR the [EXT] tag (when USE_EXT_FALLBACK), and — in `broad`
+ * (discovery) mode only — OR price-intent subjects too. One OR group across every configured signal.
+ */
+function sourceClause_(broad) {
   var parts = [];
   var fc = distributorFromClause_();
   if (fc) parts.push(fc);
   if (INGEST.USE_EXT_FALLBACK) parts.push('subject:[EXT]');
+  if (broad) { var ps = priceSubjectClause_(); if (ps) parts.push(ps); }
   if (!parts.length) throw new Error('No ingest source configured: set DISTRIBUTOR_DOMAINS or USE_EXT_FALLBACK.');
   return parts.length > 1 ? '{' + parts.join(' ') + '}' : parts[0];   // {a b} = Gmail OR group
 }
 
-/** Compose the full Gmail search: source filter AND the given time window. */
-function buildQuery_(windowClause) {
-  return sourceClause_() + ' ' + windowClause;
+/** Compose the full Gmail search: source filter AND the given time window. (broad widens the source.) */
+function buildQuery_(windowClause, broad) {
+  return sourceClause_(broad) + ' ' + windowClause;
 }
 
 /** True if the From header matches any allowlisted distributor domain (substring, case-insensitive). */
@@ -123,6 +146,61 @@ function resetBackfill() {
   var ss = db_();
   metaSet_(ss, 'email_backfill_done', 'FALSE');
   Logger.log('Backfill gate cleared — backfillEmailPrices() will sweep ' + INGEST.BACKFILL_MONTHS + ' months again.');
+}
+
+/**
+ * ONE-TIME COMPREHENSIVE FETCH — sweep every price-related mail (not just the narrow daily net).
+ * Uses the BROAD query (distributor domains OR [EXT] OR price-intent subjects, TH+EN) and a BROAD
+ * per-message gate (parses any inbound non-SCM message in a matched thread). Safe to cast wide: the
+ * _alias gate keeps Price clean — every part it can't map just queues blank in _alias for curation.
+ *
+ * RESUMABLE: grabs the newest DISCOVER_THREADS per run and walks older via an `email_discover_before`
+ * date cursor. Re-run until the log says "Discovery COMPLETE" (each re-run is dedupe-safe). Gated by
+ * email_discover_done so it won't re-sweep once finished — call resetDiscover() to run it again.
+ *
+ * Typical first-time flow:
+ *   1) seedAliases()                 — map the brands we've already seeded
+ *   2) discoverAllPriceMail()        — repeat until "COMPLETE"; fills Price for mapped parts,
+ *                                      dumps all other discovered part numbers into _alias (blank)
+ *   3) curate _alias / extend ALIAS_SEED → seedAliases() → discoverAllPriceMail() again to price them
+ */
+function discoverAllPriceMail() {
+  var ss = db_();
+  if (metaGet_(ss, 'email_discover_done') === 'TRUE') {
+    Logger.log('Discovery already complete — run resetDiscover() to sweep again.');
+    return 'discover already done';
+  }
+  var win = 'newer_than:' + INGEST.DISCOVER_MONTHS + 'm';
+  var cursor = metaGet_(ss, 'email_discover_before');          // 'yyyy/MM/dd' boundary set by a prior partial run
+  if (cursor) win += ' before:' + cursor;
+
+  var cap = INGEST.DISCOVER_THREADS;
+  var res = runIngest_(buildQuery_(win, true), 'discover', { broadGate: true, cap: cap });
+
+  // More history remains if the page filled to the cap or we ran out of time. Advance the cursor to
+  // (oldest fetched day + 1) so the next run re-includes that boundary day (dedupe-safe) and continues
+  // older. Otherwise the window is exhausted → mark done. Never advance/finish during a DRY_RUN.
+  var more = res.timedOut || res.threadsFetched >= cap;
+  if (more) {
+    if (!INGEST.DRY_RUN && res.oldestYmd) {
+      metaSet_(ss, 'email_discover_before', ymdPlusDays_(res.oldestYmd, 1).replace(/-/g, '/'));
+    }
+    Logger.log('Discovery PARTIAL (' + res.threadsFetched + ' threads) — re-run discoverAllPriceMail() to continue older.' +
+      (res.oldestYmd ? '' : '  (no progress this run — raise TIME_BUDGET_MS or trim PRICE_SUBJECT_TERMS)'));
+  } else if (!INGEST.DRY_RUN) {
+    metaSet_(ss, 'email_discover_done', 'TRUE');
+    metaSet_(ss, 'email_discover_before', '');
+    Logger.log('Discovery COMPLETE — swept ' + INGEST.DISCOVER_MONTHS + ' months of price mail.');
+  }
+  return res;
+}
+
+/** Clear the discovery gate + cursor so discoverAllPriceMail() sweeps from the newest again. */
+function resetDiscover() {
+  var ss = db_();
+  metaSet_(ss, 'email_discover_done', 'FALSE');
+  metaSet_(ss, 'email_discover_before', '');
+  Logger.log('Discovery gate cleared — discoverAllPriceMail() will sweep from the newest again.');
 }
 
 /**
@@ -187,7 +265,35 @@ var ALIAS_SEED = [
   ['V-FDN000-1S-SU1YP-00','backup:veeam:fdn-socket',     'Veeam Data Platform Foundation Socket, 1yr'],
   // --- Other security / OS licenses ---
   ['EPESCECE-AA-EA',      'endpoint:cisco:secure-endpoint-essentials', 'Endpoint Essentials Cloud (vendor 🟡 confirm)'],
-  ['RH00004',             'server:redhat:rhel-server-std','Red Hat Enterprise Linux Server, Standard']
+  ['RH00004',             'server:redhat:rhel-server-std','Red Hat Enterprise Linux Server, Standard'],
+  // --- Fortinet FortiGate (firewall) — inline service/subscription lines only; the FG-70G HW
+  //     price itself arrives as an xlsx attachment (#2, dormant until Drive enabled). ---
+  ['TN-FG70GARBO36N',     'firewall:fortinet:fortigate-70g',   'FG-70G Advance Replacement 24x7/BKK, 3yr -> support_yr'],
+  ['TN-FG70GARBO12N',     'firewall:fortinet:fortigate-70g',   'FG-70G Advance Replacement 24x7/BKK, 1yr -> support_yr'],
+  ['FTN-0081F1310236-N',  'firewall:fortinet:forticloud-mgmt', 'FortiGate Cloud Mgmt+Analysis, 1yr log, 3yr term -> lic_yr'],
+  ['FTN-GT71G1310212-N',  'firewall:fortinet:forticloud-std',  'FortiGate Cloud Standard subscription, 1yr -> lic_yr'],
+  // --- HPE Aruba ClearPass (NAC) ---
+  ['JZ399AAE',            'nac:aruba:clearpass-cx000v',        'ClearPass NAC Cx000V VM appliance license E-LTU -> lic_yr'],
+  ['JZ400AAE',            'nac:aruba:clearpass-acc-100',       'ClearPass Access License, 100 concurrent endpoints E-LTU -> lic_yr'],
+  // --- Cisco Catalyst 9300X (devices + module + support + DNA) ---
+  ['C9300X-24Y-E',        'switch:cisco:c9300x-24y-e',         'Catalyst 9300X 24x25G fiber, modular uplink'],
+  ['C9300X-NM-8Y',        'switch:cisco:c9300x-nm-8y',         'Catalyst 9300 8x10G/25G network module'],
+  ['CON-SNT-C9300XYE',    'switch:cisco:c9300x-24y-e',         'SNTC-8x5xNBD support -> support_yr'],
+  ['C9300-DNA-L-E-3Y',    'switch:cisco:c9300-dna-l-e',        'DNA Essentials, 3yr term license'],
+  ['SFP-10G-SR-S',        'switch:cisco:sfp-10g-sr-s',         '10GBASE-SR SFP, enterprise-class'],
+  // --- Allied-Telesis x550 switch + line-card/PSU support + transceivers/cables ---
+  ['AT-X550-18XSPQM-E11', 'switch:alliedtelesis:at-x550-18xspqm','x550 stackable core/distribution switch'],
+  ['AT-XEM2-12XSV2-NCA1', 'switch:alliedtelesis:at-xem2-12xs', 'Net.Cover Advanced 1yr (line card) -> support_yr'],
+  ['AT-PWR600-NCA1',      'switch:alliedtelesis:at-pwr600',    'Net.Cover Advanced 1yr (PSU) -> support_yr'],
+  ['AT-SP10TW1',          'switch:alliedtelesis:at-sp10tw1',   '1m SFP+ twinax DAC'],
+  ['AT-SP10TW3',          'switch:alliedtelesis:at-sp10tw3',   '3m SFP+ twinax DAC'],
+  ['AT-SPLX10A',          'switch:alliedtelesis:at-splx10a',   '1000BaseLX 10km SFP'],
+  ['AT-SP10SR',           'switch:alliedtelesis:at-sp10sr',    '10G 850nm short-haul SFP+'],
+  ['AT-SPSX',             'switch:alliedtelesis:at-spsx',      '1000BaseSX SFP'],
+  ['AT-QSFP1CU',          'switch:alliedtelesis:at-qsfp1cu',   '40G QSFP+ DAC 1m']
+  // NOTE: Veeam Essentials lines in _alias (V-ESSSTD-*-P024M/P01MR/P0ARE, V-ESSVUL-*-PS1MG) are
+  // maintenance-uplift / renewal / express-migration artifacts, NOT representative catalog prices —
+  // deliberately left UNMAPPED so they don't pollute backup pricing. Curate by hand if ever needed.
 ];
 /**
  * Upsert the alias mappings: FILL the sku_key of existing blank rows (the discovery sweep
@@ -228,11 +334,15 @@ function installEmailIngestTrigger() {
 // Core run
 // ---------------------------------------------------------------------------
 
-function runIngest_(query, mode) {
+function runIngest_(query, mode, opts) {
+  opts = opts || {};
+  var broadGate = !!opts.broadGate;              // discovery: parse any inbound message, not just distributor/[EXT]
+  var cap = opts.cap || INGEST.MAX_THREADS;
   var t0 = Date.now();
   var ss = db_();
   var run = { run_id: 'em-' + nowIso_(), started_at: nowIso_(), src_system: 'email', mode: mode,
-              scanned: 0, upserted: 0, superseded: 0, skipped: 0, status: 'ok', error: '', timedOut: false };
+              scanned: 0, upserted: 0, superseded: 0, skipped: 0, status: 'ok', error: '', timedOut: false,
+              threadsFetched: 0, oldestYmd: '' };
 
   try {
     var aliasMap = readAlias_(ss);                 // raw part_no -> sku_key (curated)
@@ -241,16 +351,20 @@ function runIngest_(query, mode) {
     var toAppend = [];                             // new Price rows
     var supersedeRowIdx = {};                       // 1-based sheet row -> set superseded TRUE
 
-    var threads = GmailApp.search(query, 0, INGEST.MAX_THREADS);
+    var threads = GmailApp.search(query, 0, cap);
+    run.threadsFetched = threads.length;
     for (var ti = 0; ti < threads.length; ti++) {
       if (Date.now() - t0 > INGEST.TIME_BUDGET_MS) { run.timedOut = true; break; }
+      var tYmd = ymd_(threads[ti].getLastMessageDate());   // oldest fetched thread = resume boundary (newest-first)
+      if (!run.oldestYmd || tYmd < run.oldestYmd) run.oldestYmd = tYmd;
       var msgs = threads[ti].getMessages();
       for (var mi = 0; mi < msgs.length; mi++) {
         var m = msgs[mi];
         if (isFromUs_(m.getFrom())) continue;                  // skip our own outbound RFQs
-        // Accept a distributor sender OR an [EXT]-tagged subject (mirrors the search query); a
-        // thread can mix in unrelated replies, so re-check at the message level.
-        if (!isFromDistributor_(m.getFrom()) && !/\[EXT\]/i.test(m.getSubject())) continue;
+        // Narrow gate: distributor sender OR [EXT] subject (mirrors the daily/backfill query). Broad
+        // (discovery) gate: accept any inbound message — the _alias gate still protects Price. A thread
+        // can mix unrelated replies, so this re-check at the message level matters.
+        if (!broadGate && !isFromDistributor_(m.getFrom()) && !/\[EXT\]/i.test(m.getSubject())) continue;
         run.scanned++;
         var effDate = ymd_(m.getDate());
         var items = parsePriceTable_(m.getBody());             // inline HTML tables → [{part, desc, qty, unit_thb}]
@@ -583,3 +697,10 @@ function normPart_(s) { return String(s).toUpperCase().replace(/\s+/g, '').repla
 function isFromUs_(from) { return /scmtechnologies\.co\.th/i.test(from || ''); }
 function ymd_(date) { return Utilities.formatDate(date, INGEST.TZ, 'yyyy-MM-dd'); }
 function nowIso_() { return Utilities.formatDate(new Date(), INGEST.TZ, "yyyy-MM-dd'T'HH:mm:ssXXX"); }
+/** Shift a 'yyyy-MM-dd' string by N days, returning 'yyyy-MM-dd' (used for the discovery resume cursor). */
+function ymdPlusDays_(ymd, days) {
+  var p = String(ymd).split('-');
+  var d = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
+  d.setDate(d.getDate() + days);
+  return Utilities.formatDate(d, INGEST.TZ, 'yyyy-MM-dd');
+}
