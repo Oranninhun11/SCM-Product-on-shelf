@@ -1,0 +1,65 @@
+          <section data-view="m365" hidden>
+            <div class="flex items-start justify-between gap-4">
+              <div>
+                <div class="mb-1 flex items-center gap-2 text-sm text-muted-foreground">
+                  <span class="cursor-pointer hover:text-foreground" data-nav="home">Start estimate</span>
+                  <i data-lucide="chevron-right" class="h-3.5 w-3.5"></i>
+                  <span class="text-foreground">Microsoft 365</span>
+                </div>
+                <h1 class="text-2xl font-semibold tracking-tight">Microsoft 365</h1>
+              </div>
+              <span class="badge badge-secondary shrink-0">Mock pricing</span>
+            </div>
+            <div class="mt-5" data-tabs>
+              <div class="tablist"><button class="tab active" data-tab="m365-lic">Licensing</button></div>
+              <div class="mt-5" data-panel="m365-lic">
+                <div class="card mt-6">
+                  <div class="card-header"><div class="card-title">Requirements</div></div>
+                  <div class="card-content grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    <div class="grid gap-1.5">
+                      <label class="label" for="m365-users">Units of users</label>
+                      <input id="m365-users" type="number" min="1" value="100" class="input" />
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="m365-deploy">Deployment</label>
+                      <select id="m365-deploy" class="select">
+                        <option value="new" selected>New tenant / onboarding</option>
+                        <option value="renewal">Renewal</option>
+                      </select>
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="m365-years">Subscription term</label>
+                      <select id="m365-years" class="select">
+                        <option value="1">1 year</option>
+                        <option value="3" selected>3 years</option>
+                        <option value="5">5 years</option>
+                      </select>
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="m365-sow">Onboarding</label>
+                      <select id="m365-sow" class="select">
+                        <option value="basic">Basic &mdash; tenant + email migration</option>
+                        <option value="standard" selected>Standard &mdash; + Teams / SharePoint</option>
+                        <option value="complex">Complex &mdash; + Intune / security baseline</option>
+                      </select>
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="m365-location">Location</label>
+                      <select id="m365-location" class="select">
+                        <option value="bkk" selected>Bangkok / metro</option>
+                        <option value="upcountry">Upcountry</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+                <div class="mt-6 flex flex-wrap items-baseline justify-between gap-2">
+                  <h2 class="text-lg font-semibold tracking-tight">Plan options</h2>
+                  <span class="text-xs text-muted-foreground">THB &middot; incl. 20% buffer &middot; per user &times; term</span>
+                </div>
+                <div id="m365-sizing" class="mt-2"></div>
+                <div id="m365-options" class="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3"></div>
+              </div>
+            </div>
+          </section>
+
+          <!-- ---- View: Windows Server ---- -->

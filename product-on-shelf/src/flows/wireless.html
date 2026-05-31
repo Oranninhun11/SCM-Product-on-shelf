@@ -1,0 +1,123 @@
+  <!-- ===================== Wireless (AP/WLC) flow ===================== -->
+  <script>
+    /**
+     * Wireless — AP/WLC. MOCK DATA + MOCK PRICING. APs scale by quantity; management is
+     * either a one-time controller appliance (lower per-AP license) or cloud-managed (no
+     * controller, higher per-AP license). priceOption() is the single seam.
+     */
+    (function () {
+      // --- Pricing source: window.PRICING (Sheet) when present, else mock fallback. ---
+      var P  = window.PRICING || {};
+      var PX = P.wireless || {};
+
+      var AP = PX.ap || {
+        cisco: { wifi6: { model: 'Catalyst 9120AXI', hw: 32000 }, wifi6e: { model: 'Catalyst 9136', hw: 48000 }, wifi7: { model: 'Catalyst CW9176', hw: 62000 } },
+        aruba: { wifi6: { model: 'AP-535', hw: 28000 },          wifi6e: { model: 'AP-635', hw: 42000 },        wifi7: { model: 'AP-735', hw: 58000 } }
+      };
+      var CONTROLLER = PX.controller || { cisco: { model: 'Catalyst 9800-L', hw: 220000 }, aruba: { model: '7030 Mobility Controller', hw: 160000 } };
+      var LIC_CTRL   = PX.lic_ctrl  || { cisco: 1800, aruba: 1400 };  // per-AP/yr with controller
+      var LIC_CLOUD  = PX.lic_cloud || { cisco: 2600, aruba: 2100 };  // per-AP/yr cloud-managed
+      var META       = { cisco: { name: 'Cisco', icon: 'wifi' }, aruba: { name: 'Aruba', icon: 'radio' } };
+      var WIFI_LABEL = { wifi6: 'Wi-Fi 6', wifi6e: 'Wi-Fi 6E', wifi7: 'Wi-Fi 7' };
+      var IMPL_BASE  = (P.implementation && P.implementation.wireless) || { basic: 50000, standard: 120000, complex: 240000 };
+      var SLA_MULT   = (P.multipliers && P.multipliers.sla)      || { nbd: 1.0, '8x5x4': 1.25, '24x7x4': 1.6 };
+      var LOC_MULT   = (P.multipliers && P.multipliers.location) || { bkk: 1.0, upcountry: 1.18 };
+      var SLA_LABEL  = { nbd: 'NBD', '8x5x4': '8×5×4', '24x7x4': '24×7×4' };
+      var BUFFER     = (P.knobs && P.knobs.buffer != null) ? P.knobs.buffer : 1.20;
+
+      var thb = function (n) { return '฿' + Math.round(n).toLocaleString('en-US'); };
+      var round1k = function (n) { return Math.round(n / 1000) * 1000; };
+      var el = function (id) { return document.getElementById(id); };
+
+      function priceOption(family, inp) {
+        var ap = AP[family][inp.wifi];
+        var devices = ap.hw * inp.aps;
+        var isCtrl = inp.mgmt === 'controller';
+        var ctrlHw = isCtrl ? CONTROLLER[family].hw : 0;
+        var perAp  = isCtrl ? LIC_CTRL[family] : LIC_CLOUD[family];
+        var licSup = perAp * inp.aps * inp.years * SLA_MULT[inp.sla];
+        var impl   = IMPL_BASE[inp.sow] * LOC_MULT[inp.location];
+        return { ap: ap, devices: devices, ctrlHw: ctrlHw, licSup: licSup, impl: impl,
+                 total: round1k((devices + ctrlHw + licSup + impl) * BUFFER) };
+      }
+
+      function readInputs() {
+        return {
+          aps:      Math.max(1, parseInt(el('wl-aps').value, 10) || 1),
+          wifi:     el('wl-wifi').value,
+          mgmt:     el('wl-mgmt').value,
+          sow:      el('wl-sow').value,
+          years:    parseInt(el('wl-years').value, 10),
+          sla:      el('wl-sla').value,
+          location: el('wl-location').value
+        };
+      }
+
+      function row(label, value) {
+        return '<div class="flex justify-between"><span class="text-muted-foreground">' + label +
+               '</span><span class="tabular-nums">' + value + '</span></div>';
+      }
+
+      function cardHtml(family, r, inp, recommended) {
+        var mgmtLabel = inp.mgmt === 'controller' ? CONTROLLER[family].model : 'Cloud-managed';
+        return '' +
+          '<div class="card flex flex-col' + (recommended ? ' ring-2 ring-brand-orange' : '') + '" data-vendor="' + family + '">' +
+            '<div class="card-header">' +
+              '<div class="flex items-start justify-between gap-2">' +
+                '<div class="flex items-center gap-2">' +
+                  '<i data-lucide="' + META[family].icon + '" class="h-4 w-4 text-brand-navy"></i>' +
+                  '<div class="card-title">' + META[family].name + '</div>' +
+                '</div>' +
+                (recommended ? '<span class="badge badge-brand">Best value</span>' : '') +
+              '</div>' +
+              '<div class="card-desc pt-0.5">' + r.ap.model + ' · ' + mgmtLabel + '</div>' +
+              '<div class="flex items-center gap-2 pt-1">' +
+                '<span class="badge badge-secondary">' + inp.aps + ' APs</span>' +
+                '<span class="text-xs text-muted-foreground">' + WIFI_LABEL[inp.wifi] + '</span>' +
+              '</div>' +
+            '</div>' +
+            '<div class="card-content flex-1 space-y-1.5 text-sm">' +
+              row('Access points (' + inp.aps + '×)', thb(r.devices)) +
+              row('Controller / mgmt', inp.mgmt === 'controller' ? thb(r.ctrlHw) : 'Cloud-managed') +
+              row('Licenses + support · ' + inp.years + ' yr · ' + SLA_LABEL[inp.sla], thb(r.licSup)) +
+              row('Implementation', thb(r.impl)) +
+            '</div>' +
+            '<div class="mt-auto flex flex-col gap-3 border-t border-border p-6 pt-4">' +
+              '<div class="flex items-baseline justify-between">' +
+                '<span class="text-sm text-muted-foreground">Est. total</span>' +
+                '<span class="text-xl font-semibold text-brand-navy tabular-nums">' + thb(r.total) + '</span>' +
+              '</div>' +
+              '<button class="btn btn-primary w-full" data-select="' + family + '">Add to estimate</button>' +
+            '</div>' +
+          '</div>';
+      }
+
+      function render() {
+        var inp = readInputs();
+        el('wl-sizing').innerHTML =
+          '<div class="rounded-md border border-border bg-card px-4 py-2.5 text-sm">' +
+            '<span class="font-medium tabular-nums">' + inp.aps + ' APs</span>' +
+            '<span class="text-muted-foreground"> · ' + WIFI_LABEL[inp.wifi] + ' · ' +
+              (inp.mgmt === 'controller' ? 'controller appliance' : 'cloud-managed') + '</span>' +
+          '</div>';
+        var families = ['cisco', 'aruba'];
+        var results = families.map(function (f) { return { f: f, r: priceOption(f, inp) }; });
+        var cheapest = results.reduce(function (a, b) { return b.r.total < a.r.total ? b : a; });
+        el('wl-options').innerHTML = results.map(function (x) { return cardHtml(x.f, x.r, inp, x === cheapest); }).join('');
+        lucide.createIcons();
+      }
+
+      function init() {
+        document.querySelectorAll('#wl-aps, #wl-wifi, #wl-mgmt, #wl-sow, #wl-years, #wl-sla, #wl-location')
+          .forEach(function (n) { n.addEventListener('input', render); });
+        el('wl-options').addEventListener('click', function (e) {
+          var btn = e.target.closest('[data-select]'); if (!btn) return;
+          el('wl-options').querySelectorAll('[data-vendor]').forEach(function (c) { c.classList.remove('ring-2', 'ring-brand-navy'); });
+          var card = btn.closest('[data-vendor]'); card.classList.remove('ring-brand-orange'); card.classList.add('ring-2', 'ring-brand-navy');
+        });
+        render();
+      }
+      init();
+    })();
+  </script>
+

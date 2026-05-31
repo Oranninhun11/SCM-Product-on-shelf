@@ -1,0 +1,113 @@
+  <!-- ===================== Endpoint Security (EPP/EDR/XDR) flow ===================== -->
+  <script>
+    /**
+     * Endpoint Security. MOCK DATA + MOCK PRICING. Subscription scales per endpoint × term
+     * × tier; renewal drops onboarding. priceOption() is the single seam.
+     */
+    (function () {
+      // --- Pricing source: window.PRICING (Sheet) when present, else mock fallback. ---
+      var P  = window.PRICING || {};
+      var PX = P.endpoint || {};
+
+      var PRICE = PX.price || {  // per endpoint per year, THB
+        crowdstrike: { epp: 1200, edr: 2200, xdr: 3200 },
+        trend:       { epp: 950,  edr: 1700, xdr: 2600 }
+      };
+      var EDITION = {
+        crowdstrike: { epp: 'Falcon Go', edr: 'Falcon Enterprise', xdr: 'Falcon Complete' },
+        trend:       { epp: 'Apex One',  edr: 'Vision One EDR',     xdr: 'Vision One XDR' }
+      };
+      var META       = { crowdstrike: { name: 'CrowdStrike Falcon', icon: 'shield-check' }, trend: { name: 'Trend Vision One', icon: 'shield-check' } };
+      var TIER_LABEL = { epp: 'EPP', edr: 'EDR', xdr: 'XDR' };
+      var IMPL_BASE  = (P.implementation && P.implementation.endpoint) || { basic: 40000, standard: 90000, complex: 180000 };
+      var LOC_MULT   = (P.multipliers && P.multipliers.location)       || { bkk: 1.0, upcountry: 1.18 };
+      var BUFFER     = (P.knobs && P.knobs.buffer != null)             ? P.knobs.buffer : 1.20;
+
+      var thb = function (n) { return '฿' + Math.round(n).toLocaleString('en-US'); };
+      var round1k = function (n) { return Math.round(n / 1000) * 1000; };
+      var el = function (id) { return document.getElementById(id); };
+
+      function priceOption(family, inp) {
+        var per = PRICE[family][inp.tier];
+        var subscription = per * inp.count * inp.years;
+        var impl = (inp.deploy === 'renewal') ? 0 : IMPL_BASE[inp.sow] * LOC_MULT[inp.location];
+        return { edition: EDITION[family][inp.tier], subscription: subscription, impl: impl,
+                 total: round1k((subscription + impl) * BUFFER) };
+      }
+
+      function readInputs() {
+        return {
+          count:    Math.max(1, parseInt(el('ep-count').value, 10) || 1),
+          tier:     el('ep-tier').value,
+          deploy:   el('ep-deploy').value,
+          years:    parseInt(el('ep-years').value, 10),
+          sow:      el('ep-sow').value,
+          location: el('ep-location').value
+        };
+      }
+
+      function row(label, value) {
+        return '<div class="flex justify-between"><span class="text-muted-foreground">' + label +
+               '</span><span class="tabular-nums">' + value + '</span></div>';
+      }
+
+      function cardHtml(family, r, inp, recommended) {
+        return '' +
+          '<div class="card flex flex-col' + (recommended ? ' ring-2 ring-brand-orange' : '') + '" data-vendor="' + family + '">' +
+            '<div class="card-header">' +
+              '<div class="flex items-start justify-between gap-2">' +
+                '<div class="flex items-center gap-2">' +
+                  '<i data-lucide="' + META[family].icon + '" class="h-4 w-4 text-brand-navy"></i>' +
+                  '<div class="card-title">' + META[family].name + '</div>' +
+                '</div>' +
+                (recommended ? '<span class="badge badge-brand">Best value</span>' : '') +
+              '</div>' +
+              '<div class="card-desc pt-0.5">' + r.edition + '</div>' +
+              '<div class="flex items-center gap-2 pt-1">' +
+                '<span class="badge badge-secondary">' + TIER_LABEL[inp.tier] + '</span>' +
+                '<span class="text-xs text-muted-foreground">' + inp.count + ' endpoints · ' + (inp.deploy === 'renewal' ? 'renewal' : 'new') + '</span>' +
+              '</div>' +
+            '</div>' +
+            '<div class="card-content flex-1 space-y-1.5 text-sm">' +
+              row('Subscription · ' + inp.count + ' ep · ' + inp.years + ' yr · ' + TIER_LABEL[inp.tier], thb(r.subscription)) +
+              row('Onboarding', inp.deploy === 'renewal' ? '— (renewal)' : thb(r.impl)) +
+            '</div>' +
+            '<div class="mt-auto flex flex-col gap-3 border-t border-border p-6 pt-4">' +
+              '<div class="flex items-baseline justify-between">' +
+                '<span class="text-sm text-muted-foreground">Est. total</span>' +
+                '<span class="text-xl font-semibold text-brand-navy tabular-nums">' + thb(r.total) + '</span>' +
+              '</div>' +
+              '<button class="btn btn-primary w-full" data-select="' + family + '">Add to estimate</button>' +
+            '</div>' +
+          '</div>';
+      }
+
+      function render() {
+        var inp = readInputs();
+        el('ep-sizing').innerHTML =
+          '<div class="rounded-md border border-border bg-card px-4 py-2.5 text-sm">' +
+            '<span class="font-medium tabular-nums">' + inp.count + ' endpoints</span>' +
+            '<span class="text-muted-foreground"> · ' + TIER_LABEL[inp.tier] + ' · ' +
+              (inp.deploy === 'renewal' ? 'Renewal' : 'New') + ' · ' + inp.years + ' yr</span>' +
+          '</div>';
+        var families = ['crowdstrike', 'trend'];
+        var results = families.map(function (f) { return { f: f, r: priceOption(f, inp) }; });
+        var cheapest = results.reduce(function (a, b) { return b.r.total < a.r.total ? b : a; });
+        el('ep-options').innerHTML = results.map(function (x) { return cardHtml(x.f, x.r, inp, x === cheapest); }).join('');
+        lucide.createIcons();
+      }
+
+      function init() {
+        document.querySelectorAll('#ep-count, #ep-tier, #ep-deploy, #ep-years, #ep-sow, #ep-location')
+          .forEach(function (n) { n.addEventListener('input', render); });
+        el('ep-options').addEventListener('click', function (e) {
+          var btn = e.target.closest('[data-select]'); if (!btn) return;
+          el('ep-options').querySelectorAll('[data-vendor]').forEach(function (c) { c.classList.remove('ring-2', 'ring-brand-navy'); });
+          var card = btn.closest('[data-vendor]'); card.classList.remove('ring-brand-orange'); card.classList.add('ring-2', 'ring-brand-navy');
+        });
+        render();
+      }
+      init();
+    })();
+  </script>
+

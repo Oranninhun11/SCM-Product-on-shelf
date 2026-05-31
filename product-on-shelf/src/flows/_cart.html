@@ -1,0 +1,179 @@
+  <!-- ===================== Custom estimate (shared cart) ===================== -->
+  <script>
+    /**
+     * Cross-flow estimate cart. Each option card's "Add to estimate" button is read from the
+     * DOM here (one delegated listener — no per-flow wiring), so any flow can contribute a line.
+     * One line per product category: re-adding from a category replaces it.
+     */
+    (function () {
+      var CAT = {
+        firewall: 'Firewall', router: 'Router / SD-WAN', switch: 'Network Switch', adc: 'Load balancer',
+        wireless: 'Wireless (AP/WLC)', hci: 'Server / HCI', server: 'Standalone Server', storage: 'Storage',
+        backup: 'Backup & DR', ups: 'UPS / Power', m365: 'Microsoft 365', ws: 'Windows Server', virt: 'Virtualization', endpoint: 'Endpoint Security',
+        nac: 'NAC', dlp: 'DLP', esec: 'Email & SASE', captive: 'Captive portal', siem: 'Logging / SIEM'
+      };
+      var thb = function (n) { return '฿' + Math.round(n).toLocaleString('en-US'); };
+      var el  = function (id) { return document.getElementById(id); };
+
+      // --- Store ---
+      var Estimate = (function () {
+        var items = [], subs = [];
+        function emit() { subs.forEach(function (fn) { fn(items.slice()); }); }
+        function indexOf(id) { for (var i = 0; i < items.length; i++) { if (items[i].id === id) return i; } return -1; }
+        return {
+          // Product items pass id = category (so re-adding a category replaces its line);
+          // custom line items pass a unique id (so several can coexist).
+          set: function (it) { var i = indexOf(it.id); if (i >= 0) items[i] = it; else items.push(it); emit(); },
+          remove: function (id) { var i = indexOf(id); if (i >= 0) { items.splice(i, 1); emit(); } },
+          clear: function () { items = []; emit(); },
+          list: function () { return items.slice(); },
+          total: function () { return items.reduce(function (s, x) { return s + x.total; }, 0); },
+          onChange: function (fn) { subs.push(fn); fn(items.slice()); }
+        };
+      })();
+      window.PoSEstimate = Estimate;
+
+      // --- Add: one delegated listener reads the clicked option card ---
+      document.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-select]');
+        if (!btn) return;
+        var card = btn.closest('[data-vendor],[data-family]');
+        var sect = btn.closest('[data-view]');
+        if (!card || !sect) return;
+        var key = sect.getAttribute('data-view');
+        var titleEl = card.querySelector('.card-title');
+        var descEl  = card.querySelector('.card-desc');
+        var totalEl = card.querySelector('.text-xl');
+        var cat = CAT[key] || key;
+        // Capture the card's cost breakdown rows (Device / Implementation / Support · license / …)
+        // so the estimate line can expand to show what the price already includes.
+        var breakdown = [];
+        var contentEl = card.querySelector('.card-content');
+        if (contentEl) {
+          contentEl.querySelectorAll(':scope > div').forEach(function (rd) {
+            var sp = rd.querySelectorAll('span');
+            if (sp.length >= 2) breakdown.push({ label: sp[0].textContent, value: sp[sp.length - 1].textContent });
+          });
+        }
+        Estimate.set({
+          id: cat,                          // product line: one per category, re-add replaces
+          category: cat,
+          title: titleEl ? titleEl.textContent : '',
+          desc:  descEl ? descEl.textContent : '',
+          breakdown: breakdown,
+          total: totalEl ? Number(totalEl.textContent.replace(/[^0-9]/g, '')) : 0
+        });
+        // highlight the chosen card (covers flows without their own handler, e.g. SIEM)
+        var grid = card.parentElement;
+        grid.querySelectorAll('[data-vendor],[data-family]').forEach(function (c) { c.classList.remove('ring-2', 'ring-brand-navy'); });
+        card.classList.remove('ring-brand-orange'); card.classList.add('ring-2', 'ring-brand-navy');
+        var orig = btn.textContent; btn.textContent = 'Added ✓';
+        setTimeout(function () { btn.textContent = orig; }, 1100);
+      });
+
+      // --- Remove / clear ---
+      document.addEventListener('click', function (e) {
+        var rm = e.target.closest('[data-remove]');
+        if (rm) { Estimate.remove(rm.getAttribute('data-remove')); }
+      });
+
+      // --- Expand / collapse a line's cost breakdown ---
+      document.addEventListener('click', function (e) {
+        var ex = e.target.closest('[data-expand]');
+        if (!ex) return;
+        var detail = document.querySelector('[data-detail="' + ex.getAttribute('data-expand') + '"]');
+        if (!detail) return;
+        var open = detail.classList.toggle('hidden') === false;
+        var icon = ex.querySelector('svg, i');   // lucide swaps <i> for <svg> at render
+        if (icon) icon.style.transform = open ? 'rotate(90deg)' : '';
+      });
+
+      // --- Render: nav badge + Custom estimate view ---
+      function renderBadge(items) {
+        var b = el('est-count'); if (!b) return;
+        b.textContent = items.length;
+        b.classList.toggle('hidden', items.length === 0);
+      }
+
+      function renderView(items) {
+        var body = el('est-body'); if (!body) return;
+        if (!items.length) {
+          body.innerHTML =
+            '<div class="card"><div class="card-content flex flex-col items-center gap-3 py-14 text-center">' +
+              '<div class="flex h-12 w-12 items-center justify-center rounded-full bg-secondary">' +
+                '<i data-lucide="clipboard-list" class="h-6 w-6 text-muted-foreground"></i></div>' +
+              '<div class="card-title">No items yet</div>' +
+              '<p class="max-w-sm text-sm text-muted-foreground">Open any product, configure it, and click ' +
+                '<span class="font-medium text-foreground">Add to estimate</span> to build a combined quote.</p>' +
+            '</div></div>';
+          lucide.createIcons(); return;
+        }
+        var rows = items.map(function (it) {
+          var hasDetail = it.breakdown && it.breakdown.length;
+          var chevron = hasDetail
+            ? '<button class="btn btn-ghost btn-icon shrink-0" data-expand="' + it.id + '" title="Show breakdown" aria-label="Show breakdown">' +
+                '<i data-lucide="chevron-right" class="h-4 w-4"></i></button>'
+            : '<span class="btn btn-icon shrink-0" style="visibility:hidden"></span>';
+          var detail = hasDetail
+            ? '<div data-detail="' + it.id + '" class="hidden space-y-1.5 px-6 pb-4 pl-16 text-sm">' +
+                it.breakdown.map(function (b) {
+                  return '<div class="flex justify-between gap-4">' +
+                    '<span class="text-muted-foreground">' + b.label + '</span>' +
+                    '<span class="tabular-nums">' + b.value + '</span>' +
+                  '</div>';
+                }).join('') +
+              '</div>'
+            : '';
+          return '<div class="border-b border-border">' +
+            '<div class="flex items-center justify-between gap-4 px-6 py-4">' +
+              '<div class="flex min-w-0 items-start gap-2">' +
+                chevron +
+                '<div class="min-w-0 pt-1.5">' +
+                  '<div class="flex items-center gap-2">' +
+                    '<span class="badge badge-secondary">' + it.category + '</span>' +
+                    '<span class="font-medium">' + it.title + '</span>' +
+                  '</div>' +
+                  '<div class="truncate text-sm text-muted-foreground">' + it.desc + '</div>' +
+                '</div>' +
+              '</div>' +
+              '<div class="flex shrink-0 items-center gap-4">' +
+                '<span class="text-base font-semibold tabular-nums text-brand-navy">' + thb(it.total) + '</span>' +
+                '<button class="btn btn-ghost btn-icon" data-remove="' + it.id + '" title="Remove" aria-label="Remove ' + it.category + '"><i data-lucide="x" class="h-4 w-4"></i></button>' +
+              '</div>' +
+            '</div>' +
+            detail +
+          '</div>';
+        }).join('');
+        body.innerHTML =
+          '<div class="card">' +
+            '<div class="card-header"><div class="card-title">' + items.length + ' item' + (items.length > 1 ? 's' : '') + '</div>' +
+              '<div class="card-desc">Mock pricing · THB · each line already includes its 20% buffer.</div></div>' +
+            '<div>' + rows + '</div>' +
+            '<div class="sticky bottom-0 flex items-center justify-between border-t border-border bg-card px-6 py-5">' +
+              '<span class="text-sm font-medium text-muted-foreground">Estimated grand total</span>' +
+              '<span class="text-2xl font-semibold tabular-nums text-brand-navy">' + thb(Estimate.total()) + '</span>' +
+            '</div>' +
+          '</div>';
+        lucide.createIcons();
+      }
+
+      var clearBtn = el('est-clear');
+      if (clearBtn) clearBtn.addEventListener('click', function () { Estimate.clear(); });
+
+      // Custom line item — its own unique id so several can coexist alongside product lines.
+      var seq = 0;
+      var addForm = el('cl-form');
+      if (addForm) addForm.addEventListener('submit', function (e) {
+        e.preventDefault();                       // Enter in either field, or the button, adds the line
+        var d = el('cl-desc'), a = el('cl-amount');
+        var desc = (d.value || '').trim();
+        var amt = Math.max(0, parseFloat(a.value) || 0);
+        if (!desc || !amt) return;
+        Estimate.set({ id: 'custom-' + (++seq), category: 'Custom', title: desc, desc: 'Custom line item', total: amt });
+        d.value = ''; a.value = '';
+      });
+
+      Estimate.onChange(function (items) { renderBadge(items); renderView(items); });
+    })();
+  </script>
+

@@ -1,0 +1,82 @@
+          <section data-view="virt" hidden>
+            <div class="flex items-start justify-between gap-4">
+              <div>
+                <div class="mb-1 flex items-center gap-2 text-sm text-muted-foreground">
+                  <span class="cursor-pointer hover:text-foreground" data-nav="home">Start estimate</span>
+                  <i data-lucide="chevron-right" class="h-3.5 w-3.5"></i>
+                  <span class="text-foreground">Virtualization</span>
+                </div>
+                <h1 class="text-2xl font-semibold tracking-tight">Virtualization</h1>
+              </div>
+              <span class="badge badge-secondary shrink-0">Mock pricing</span>
+            </div>
+            <div class="mt-5" data-tabs>
+              <div class="tablist"><button class="tab active" data-tab="virt-lic">Licensing</button></div>
+              <div class="mt-5" data-panel="virt-lic">
+                <div class="card mt-6">
+                  <div class="card-header"><div class="card-title">Requirements</div></div>
+                  <div class="card-content grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    <div class="grid gap-1.5">
+                      <label class="label" for="virt-sockets">Units of CPU sockets</label>
+                      <input id="virt-sockets" type="number" min="1" value="6" class="input" />
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="virt-cores">Cores per socket</label>
+                      <select id="virt-cores" class="select">
+                        <option value="16">16</option>
+                        <option value="24" selected>24</option>
+                        <option value="32">32</option>
+                        <option value="48">48</option>
+                      </select>
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="virt-tier">Edition tier</label>
+                      <select id="virt-tier" class="select">
+                        <option value="standard">Standard &mdash; vSphere / Starter</option>
+                        <option value="advanced" selected>Advanced &mdash; VVF / Pro</option>
+                        <option value="full">Full-stack &mdash; VCF / Ultimate (HCI)</option>
+                      </select>
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="virt-deploy">Deployment</label>
+                      <select id="virt-deploy" class="select">
+                        <option value="new" selected>New deployment</option>
+                        <option value="renewal">Renewal</option>
+                      </select>
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="virt-years">Subscription term</label>
+                      <select id="virt-years" class="select">
+                        <option value="1">1 year</option>
+                        <option value="3" selected>3 years</option>
+                        <option value="5">5 years</option>
+                      </select>
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="virt-sow">SOW scope</label>
+                      <select id="virt-sow" class="select">
+                        <option value="basic">Basic &mdash; install &amp; licensing</option>
+                        <option value="standard" selected>Standard &mdash; build + migrate VMs</option>
+                        <option value="complex">Complex &mdash; full migration + HCI/DR</option>
+                      </select>
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="virt-location">Location</label>
+                      <select id="virt-location" class="select">
+                        <option value="bkk" selected>Bangkok / metro</option>
+                        <option value="upcountry">Upcountry</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+                <div class="mt-6 flex flex-wrap items-baseline justify-between gap-2">
+                  <h2 class="text-lg font-semibold tracking-tight">Virtualization options</h2>
+                  <span class="text-xs text-muted-foreground">THB &middot; incl. 20% buffer &middot; per core (Proxmox per socket) &times; term</span>
+                </div>
+                <div id="virt-sizing" class="mt-2"></div>
+                <div id="virt-options" class="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3"></div>
+              </div>
+            </div>
+          </section>
+
+          <!-- ---- View: Custom estimate (cart) ---- -->

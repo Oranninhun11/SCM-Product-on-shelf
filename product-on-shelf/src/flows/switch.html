@@ -1,0 +1,157 @@
+  <!-- ===================== Network Switch Replacement flow ===================== -->
+  <script>
+    /**
+     * Network Switch — Replacement project.
+     *
+     * MOCK DATA + MOCK PRICING (same pattern as Firewall). Matches the existing
+     * switch's port count + PoE, picks the equivalent Cisco / Aruba model, scales
+     * device price by quantity (impl + support flat, per the house preference).
+     * priceOption() is the single seam to rewire in the integration phase.
+     */
+    (function () {
+      // --- Pricing source: window.PRICING (Sheet) when present, else mock fallback. ---
+      var P  = window.PRICING || {};
+      var PX = P.switch || {};
+
+      var EXISTING = PX.existing || [
+        { id: 'cat9300-48',  label: 'Cisco Catalyst 9300-48P', ports: 48, speed: 'mGig', poe: true },
+        { id: 'cat2960x-48', label: 'Cisco Catalyst 2960X-48', ports: 48, speed: '1G',   poe: false },
+        { id: 'aruba2930-48',label: 'Aruba 2930F-48',          ports: 48, speed: '1G',   poe: true },
+        { id: 'cat9200-24',  label: 'Cisco Catalyst 9200-24P', ports: 24, speed: '1G',   poe: true },
+        { id: 'hpe5130-24',  label: 'HPE 5130-24G',            ports: 24, speed: '1G',   poe: false }
+      ];
+
+      var CATALOG = PX.catalog || {
+        cisco: [
+          { model: 'C9200L-24P',  ports: 24, hw: 95000,  lic: 9000 },
+          { model: 'C9200L-48P',  ports: 48, hw: 155000, lic: 14000 }
+        ],
+        aruba: [
+          { model: 'CX 6300M-24', ports: 24, hw: 78000,  lic: 7000 },
+          { model: 'CX 6300M-48', ports: 48, hw: 135000, lic: 11000 }
+        ]
+      };
+
+      var META = {
+        cisco: { name: 'Cisco Catalyst', icon: 'network' },
+        aruba: { name: 'Aruba CX',       icon: 'router' }
+      };
+
+      var IMPL_BASE   = (P.implementation && P.implementation.switch) || { basic: 25000, standard: 55000, complex: 110000 };
+      var SLA_MULT    = (P.multipliers && P.multipliers.sla)          || { nbd: 1.0, '8x5x4': 1.25, '24x7x4': 1.6 };
+      var LOC_MULT    = (P.multipliers && P.multipliers.location)     || { bkk: 1.0, upcountry: 1.18 };
+      var SLA_LABEL   = { nbd: 'NBD', '8x5x4': '8×5×4', '24x7x4': '24×7×4' };
+      var NONPOE_DISC = (P.knobs && P.knobs.switch_nonpoe_disc != null) ? P.knobs.switch_nonpoe_disc : 0.85;  // non-PoE models run ~15% cheaper
+      var BUFFER      = (P.knobs && P.knobs.buffer != null)          ? P.knobs.buffer : 1.20;
+
+      var thb     = function (n) { return '฿' + Math.round(n).toLocaleString('en-US'); };
+      var round1k = function (n) { return Math.round(n / 1000) * 1000; };
+      var el      = function (id) { return document.getElementById(id); };
+
+      function pickModel(family, reqPorts) {
+        var list = CATALOG[family];
+        for (var i = 0; i < list.length; i++) { if (list[i].ports >= reqPorts) return list[i]; }
+        return list[list.length - 1];
+      }
+
+      // The single pricing seam — replace its inputs with real data in the integration phase.
+      function priceOption(family, reqPorts, inp) {
+        var m = pickModel(family, reqPorts);
+        var poeFactor = (inp.poe === 'yes') ? 1 : NONPOE_DISC;
+        var device  = m.hw * poeFactor * inp.units;          // scales with quantity
+        var impl    = IMPL_BASE[inp.sow] * LOC_MULT[inp.location]; // flat
+        var support = m.lic * inp.years * SLA_MULT[inp.sla];       // flat
+        return { model: m, device: device, impl: impl, support: support,
+                 total: round1k((device + impl + support) * BUFFER) };
+      }
+
+      function readInputs() {
+        return {
+          model:    el('sw-model').value,
+          units:    Math.max(1, parseInt(el('sw-units').value, 10) || 1),
+          poe:      el('sw-poe').value,
+          sow:      el('sw-sow').value,
+          years:    parseInt(el('sw-years').value, 10),
+          sla:      el('sw-sla').value,
+          location: el('sw-location').value
+        };
+      }
+
+      function row(label, value) {
+        return '<div class="flex justify-between"><span class="text-muted-foreground">' + label +
+               '</span><span class="tabular-nums">' + value + '</span></div>';
+      }
+
+      function cardHtml(family, r, inp, recommended) {
+        return '' +
+          '<div class="card flex flex-col' + (recommended ? ' ring-2 ring-brand-orange' : '') + '" data-vendor="' + family + '">' +
+            '<div class="card-header">' +
+              '<div class="flex items-start justify-between gap-2">' +
+                '<div class="flex items-center gap-2">' +
+                  '<i data-lucide="' + META[family].icon + '" class="h-4 w-4 text-brand-navy"></i>' +
+                  '<div class="card-title">' + META[family].name + '</div>' +
+                '</div>' +
+                (recommended ? '<span class="badge badge-brand">Best value</span>' : '') +
+              '</div>' +
+              '<div class="card-desc pt-0.5">' + r.model.model + '</div>' +
+              '<div class="flex items-center gap-2 pt-1">' +
+                '<span class="badge badge-secondary">' + r.model.ports + ' ports</span>' +
+                '<span class="text-xs text-muted-foreground">' + (inp.poe === 'yes' ? 'PoE' : 'non-PoE') + ' · matches existing</span>' +
+              '</div>' +
+            '</div>' +
+            '<div class="card-content flex-1 space-y-1.5 text-sm">' +
+              row('Device (' + inp.units + '×)', thb(r.device)) +
+              row('Implementation', thb(r.impl)) +
+              row('Support · ' + inp.years + ' yr · ' + SLA_LABEL[inp.sla], thb(r.support)) +
+            '</div>' +
+            '<div class="mt-auto flex flex-col gap-3 border-t border-border p-6 pt-4">' +
+              '<div class="flex items-baseline justify-between">' +
+                '<span class="text-sm text-muted-foreground">Est. total</span>' +
+                '<span class="text-xl font-semibold text-brand-navy tabular-nums">' + thb(r.total) + '</span>' +
+              '</div>' +
+              '<button class="btn btn-primary w-full" data-select="' + family + '">Add to estimate</button>' +
+            '</div>' +
+          '</div>';
+      }
+
+      function render() {
+        var inp = readInputs();
+        var existing = EXISTING.filter(function (e) { return e.id === inp.model; })[0] || EXISTING[0];
+        el('sw-detected').textContent = existing.ports + ' ports · ' + existing.speed + (existing.poe ? ' · PoE' : '');
+
+        var families = ['cisco', 'aruba'];
+        var results = families.map(function (f) { return { f: f, r: priceOption(f, existing.ports, inp) }; });
+        var cheapest = results.reduce(function (a, b) { return b.r.total < a.r.total ? b : a; });
+
+        el('sw-options').innerHTML = results.map(function (x) {
+          return cardHtml(x.f, x.r, inp, x === cheapest);
+        }).join('');
+        lucide.createIcons();
+      }
+
+      function init() {
+        el('sw-model').innerHTML = EXISTING.map(function (e) {
+          return '<option value="' + e.id + '">' + e.label + ' (' + e.ports + 'p' + (e.poe ? ', PoE' : '') + ')</option>';
+        }).join('');
+
+        document.querySelectorAll('#sw-model, #sw-units, #sw-poe, #sw-sow, #sw-years, #sw-sla, #sw-location')
+          .forEach(function (n) { n.addEventListener('input', render); });
+
+        el('sw-options').addEventListener('click', function (e) {
+          var btn = e.target.closest('[data-select]');
+          if (!btn) return;
+          el('sw-options').querySelectorAll('[data-vendor]').forEach(function (c) {
+            c.classList.remove('ring-2', 'ring-brand-navy');
+          });
+          var card = btn.closest('[data-vendor]');
+          card.classList.remove('ring-brand-orange');
+          card.classList.add('ring-2', 'ring-brand-navy');
+        });
+
+        render();
+      }
+
+      init();
+    })();
+  </script>
+

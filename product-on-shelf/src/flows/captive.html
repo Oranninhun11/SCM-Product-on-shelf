@@ -1,0 +1,106 @@
+  <!-- ===================== Captive portal flow ===================== -->
+  <script>
+    /**
+     * Captive portal. MOCK DATA + MOCK PRICING. Per-site license × term, scaled by the
+     * concurrent-guest tier; renewal drops implementation. priceOption() is the single seam.
+     */
+    (function () {
+      // --- Pricing source: window.PRICING (Sheet) when present, else mock fallback. ---
+      var P  = window.PRICING || {};
+      var PX = P.captive || {};
+
+      var PER_SITE = PX.per_site || { aruba: 60000, cisco: 75000 };  // per site per year
+      var MODEL    = { aruba: 'ClearPass Guest', cisco: 'ISE Guest' };
+      var META     = { aruba: { name: 'Aruba ClearPass Guest', icon: 'log-in' }, cisco: { name: 'Cisco ISE Guest', icon: 'log-in' } };
+      var USER_MULT  = PX.user_mult || { s: 1.0, m: 1.4, l: 1.9 };
+      var USER_LABEL = { s: '≤200', m: '≤500', l: '≤1000' };
+      var IMPL_BASE  = (P.implementation && P.implementation.captive) || { basic: 30000, standard: 70000, complex: 140000 };
+      var LOC_MULT   = (P.multipliers && P.multipliers.location)      || { bkk: 1.0, upcountry: 1.18 };
+      var BUFFER     = (P.knobs && P.knobs.buffer != null)           ? P.knobs.buffer : 1.20;
+
+      var thb = function (n) { return '฿' + Math.round(n).toLocaleString('en-US'); };
+      var round1k = function (n) { return Math.round(n / 1000) * 1000; };
+      var el = function (id) { return document.getElementById(id); };
+
+      function priceOption(family, inp) {
+        var license = PER_SITE[family] * inp.sites * inp.years * USER_MULT[inp.users];
+        var impl = (inp.deploy === 'renewal') ? 0 : IMPL_BASE[inp.sow] * LOC_MULT[inp.location];
+        return { license: license, impl: impl, total: round1k((license + impl) * BUFFER) };
+      }
+
+      function readInputs() {
+        return {
+          sites:    Math.max(1, parseInt(el('cp-sites').value, 10) || 1),
+          users:    el('cp-users').value,
+          deploy:   el('cp-deploy').value,
+          years:    parseInt(el('cp-years').value, 10),
+          sow:      el('cp-sow').value,
+          location: el('cp-location').value
+        };
+      }
+
+      function row(label, value) {
+        return '<div class="flex justify-between"><span class="text-muted-foreground">' + label +
+               '</span><span class="tabular-nums">' + value + '</span></div>';
+      }
+
+      function cardHtml(family, r, inp, recommended) {
+        return '' +
+          '<div class="card flex flex-col' + (recommended ? ' ring-2 ring-brand-orange' : '') + '" data-vendor="' + family + '">' +
+            '<div class="card-header">' +
+              '<div class="flex items-start justify-between gap-2">' +
+                '<div class="flex items-center gap-2">' +
+                  '<i data-lucide="' + META[family].icon + '" class="h-4 w-4 text-brand-navy"></i>' +
+                  '<div class="card-title">' + META[family].name + '</div>' +
+                '</div>' +
+                (recommended ? '<span class="badge badge-brand">Best value</span>' : '') +
+              '</div>' +
+              '<div class="card-desc pt-0.5">' + MODEL[family] + '</div>' +
+              '<div class="flex items-center gap-2 pt-1">' +
+                '<span class="badge badge-secondary">' + inp.sites + ' site' + (inp.sites > 1 ? 's' : '') + '</span>' +
+                '<span class="text-xs text-muted-foreground">' + USER_LABEL[inp.users] + ' concurrent · ' + (inp.deploy === 'renewal' ? 'renewal' : 'new') + '</span>' +
+              '</div>' +
+            '</div>' +
+            '<div class="card-content flex-1 space-y-1.5 text-sm">' +
+              row('Portal license · ' + inp.sites + ' site' + (inp.sites > 1 ? 's' : '') + ' · ' + inp.years + ' yr', thb(r.license)) +
+              row('Implementation', inp.deploy === 'renewal' ? '— (renewal)' : thb(r.impl)) +
+            '</div>' +
+            '<div class="mt-auto flex flex-col gap-3 border-t border-border p-6 pt-4">' +
+              '<div class="flex items-baseline justify-between">' +
+                '<span class="text-sm text-muted-foreground">Est. total</span>' +
+                '<span class="text-xl font-semibold text-brand-navy tabular-nums">' + thb(r.total) + '</span>' +
+              '</div>' +
+              '<button class="btn btn-primary w-full" data-select="' + family + '">Add to estimate</button>' +
+            '</div>' +
+          '</div>';
+      }
+
+      function render() {
+        var inp = readInputs();
+        el('cp-sizing').innerHTML =
+          '<div class="rounded-md border border-border bg-card px-4 py-2.5 text-sm">' +
+            '<span class="font-medium tabular-nums">' + inp.sites + ' site' + (inp.sites > 1 ? 's' : '') + '</span>' +
+            '<span class="text-muted-foreground"> · ' + USER_LABEL[inp.users] + ' concurrent · ' +
+              (inp.deploy === 'renewal' ? 'Renewal' : 'New') + ' · ' + inp.years + ' yr</span>' +
+          '</div>';
+        var families = ['aruba', 'cisco'];
+        var results = families.map(function (f) { return { f: f, r: priceOption(f, inp) }; });
+        var cheapest = results.reduce(function (a, b) { return b.r.total < a.r.total ? b : a; });
+        el('cp-options').innerHTML = results.map(function (x) { return cardHtml(x.f, x.r, inp, x === cheapest); }).join('');
+        lucide.createIcons();
+      }
+
+      function init() {
+        document.querySelectorAll('#cp-sites, #cp-users, #cp-deploy, #cp-years, #cp-sow, #cp-location')
+          .forEach(function (n) { n.addEventListener('input', render); });
+        el('cp-options').addEventListener('click', function (e) {
+          var btn = e.target.closest('[data-select]'); if (!btn) return;
+          el('cp-options').querySelectorAll('[data-vendor]').forEach(function (c) { c.classList.remove('ring-2', 'ring-brand-navy'); });
+          var card = btn.closest('[data-vendor]'); card.classList.remove('ring-brand-orange'); card.classList.add('ring-2', 'ring-brand-navy');
+        });
+        render();
+      }
+      init();
+    })();
+  </script>
+

@@ -1,0 +1,158 @@
+  <!-- ===================== Firewall New-install flow ===================== -->
+  <script>
+    /**
+     * Firewall — New install project.
+     *
+     * MOCK DATA + MOCK PRICING. Greenfield variant of the Replacement flow: required
+     * throughput is entered directly (no existing model), sized to ≥ required ×1.2, then
+     * priced per Fortinet / Palo Alto. HA pair scales the device only. priceOption() seam.
+     */
+    (function () {
+      // --- Pricing source: window.PRICING (Sheet) when present, else mock fallback. ---
+      var P  = window.PRICING || {};
+      var PX = P.firewall || {};
+
+      var CATALOG = PX.catalog || {
+        fortinet: [
+          { model: 'FortiGate 70F',  tp: 10, hw: 55000,  lic: 32000 },
+          { model: 'FortiGate 120G', tp: 24, hw: 120000, lic: 58000 },
+          { model: 'FortiGate 200F', tp: 27, hw: 185000, lic: 78000 },
+          { model: 'FortiGate 400F', tp: 37, hw: 320000, lic: 120000 },
+          { model: 'FortiGate 600F', tp: 40, hw: 420000, lic: 150000 }
+        ],
+        paloalto: [
+          { model: 'PA-410',  tp: 1.2,  hw: 65000,  lic: 42000 },
+          { model: 'PA-450',  tp: 5.5,  hw: 140000, lic: 72000 },
+          { model: 'PA-1410', tp: 10.6, hw: 290000, lic: 120000 },
+          { model: 'PA-3410', tp: 18,   hw: 520000, lic: 190000 },
+          { model: 'PA-3420', tp: 24,   hw: 680000, lic: 240000 }
+        ]
+      };
+
+      var META = {
+        fortinet: { name: 'Fortinet',  icon: 'shield' },
+        paloalto: { name: 'Palo Alto', icon: 'shield-half' }
+      };
+
+      var IMPL_BASE = (P.implementation && P.implementation.firewall) || { basic: 35000, standard: 75000, complex: 140000 };
+      var SLA_MULT  = (P.multipliers && P.multipliers.sla)            || { nbd: 1.0, '8x5x4': 1.25, '24x7x4': 1.6 };
+      var LOC_MULT  = (P.multipliers && P.multipliers.location)       || { bkk: 1.0, upcountry: 1.18 };
+      var SITE_PREP = (P.knobs && P.knobs.firewall_site_prep != null) ? P.knobs.firewall_site_prep : 25000;
+      var BUFFER    = (P.knobs && P.knobs.buffer != null)             ? P.knobs.buffer : 1.20;
+      var GROWTH    = 1.20;
+      var SLA_LABEL = { nbd: 'NBD', '8x5x4': '8×5×4', '24x7x4': '24×7×4' };
+
+      var thb     = function (n) { return '฿' + Math.round(n).toLocaleString('en-US'); };
+      var round1k = function (n) { return Math.round(n / 1000) * 1000; };
+      var el      = function (id) { return document.getElementById(id); };
+
+      function pickModel(family, requiredTp) {
+        var list = CATALOG[family];
+        for (var i = 0; i < list.length; i++) { if (list[i].tp >= requiredTp) return list[i]; }
+        return list[list.length - 1];
+      }
+
+      function priceOption(family, requiredTp, inp) {
+        var m = pickModel(family, requiredTp);
+        var device   = m.hw * inp.units;             // HA pair doubles the device
+        var sitePrep = SITE_PREP;
+        var impl     = IMPL_BASE[inp.sow] * LOC_MULT[inp.location];
+        var support  = m.lic * inp.years * SLA_MULT[inp.sla];
+        return { model: m, device: device, sitePrep: sitePrep, impl: impl, support: support,
+                 throughput: m.tp, note: m.tp >= requiredTp ? 'meets sizing' : 'closest available',
+                 total: round1k((device + sitePrep + impl + support) * BUFFER) };
+      }
+
+      function readInputs() {
+        return {
+          tp:       Math.max(1, parseFloat(el('fwn-tp').value) || 1),
+          units:    parseInt(el('fwn-deploy').value, 10),
+          sow:      el('fwn-sow').value,
+          years:    parseInt(el('fwn-years').value, 10),
+          sla:      el('fwn-sla').value,
+          location: el('fwn-location').value
+        };
+      }
+
+      function row(label, value) {
+        return '<div class="flex justify-between"><span class="text-muted-foreground">' + label +
+               '</span><span class="tabular-nums">' + value + '</span></div>';
+      }
+
+      function cardHtml(family, r, inp, recommended) {
+        return '' +
+          '<div class="card flex flex-col' + (recommended ? ' ring-2 ring-brand-orange' : '') + '" data-family="' + family + '">' +
+            '<div class="card-header">' +
+              '<div class="flex items-start justify-between gap-2">' +
+                '<div class="flex items-center gap-2">' +
+                  '<i data-lucide="' + META[family].icon + '" class="h-4 w-4 text-brand-navy"></i>' +
+                  '<div class="card-title">' + META[family].name + '</div>' +
+                '</div>' +
+                (recommended ? '<span class="badge badge-brand">Best value</span>' : '') +
+              '</div>' +
+              '<div class="card-desc pt-0.5">' + r.model.model + (inp.units > 1 ? ' ×2 (HA)' : '') + '</div>' +
+              '<div class="flex items-center gap-2 pt-1">' +
+                '<span class="badge badge-secondary">' + r.throughput + ' Gbps</span>' +
+                '<span class="text-xs text-muted-foreground">' + r.note + '</span>' +
+              '</div>' +
+            '</div>' +
+            '<div class="card-content flex-1 space-y-1.5 text-sm">' +
+              row('Device' + (inp.units > 1 ? ' (' + inp.units + '×)' : ''), thb(r.device)) +
+              row('Site prep', thb(r.sitePrep)) +
+              row('Implementation', thb(r.impl)) +
+              row('Support · ' + inp.years + ' yr · ' + SLA_LABEL[inp.sla], thb(r.support)) +
+            '</div>' +
+            '<div class="mt-auto flex flex-col gap-3 border-t border-border p-6 pt-4">' +
+              '<div class="flex items-baseline justify-between">' +
+                '<span class="text-sm text-muted-foreground">Est. total</span>' +
+                '<span class="text-xl font-semibold text-brand-navy tabular-nums">' + thb(r.total) + '</span>' +
+              '</div>' +
+              '<button class="btn btn-primary w-full" data-select="' + family + '">Add to estimate</button>' +
+            '</div>' +
+          '</div>';
+      }
+
+      function render() {
+        var inp = readInputs();
+        var requiredTp = Math.ceil(inp.tp * GROWTH * 10) / 10;
+        el('fwn-sizing').innerHTML =
+          '<div class="rounded-md border border-border bg-card px-4 py-2.5 text-sm">' +
+            '<span class="text-muted-foreground">Required </span>' +
+            '<span class="font-medium tabular-nums">' + inp.tp + ' Gbps</span>' +
+            '<span class="text-muted-foreground"> → size ≥ </span>' +
+            '<span class="font-medium tabular-nums">' + requiredTp + ' Gbps</span>' +
+            '<span class="text-muted-foreground"> (×1.2) · ' + (inp.units > 1 ? 'HA pair' : 'Single appliance') + '</span>' +
+          '</div>';
+
+        var families = ['fortinet', 'paloalto'];
+        var results = families.map(function (f) { return { f: f, r: priceOption(f, requiredTp, inp) }; });
+        var cheapest = results.reduce(function (a, b) { return b.r.total < a.r.total ? b : a; });
+
+        el('fwn-options').innerHTML = results.map(function (x) {
+          return cardHtml(x.f, x.r, inp, x === cheapest);
+        }).join('');
+        lucide.createIcons();
+      }
+
+      function init() {
+        document.querySelectorAll('#fwn-tp, #fwn-deploy, #fwn-sow, #fwn-years, #fwn-sla, #fwn-location')
+          .forEach(function (n) { n.addEventListener('input', render); });
+
+        el('fwn-options').addEventListener('click', function (e) {
+          var btn = e.target.closest('[data-select]');
+          if (!btn) return;
+          el('fwn-options').querySelectorAll('[data-family]').forEach(function (c) {
+            c.classList.remove('ring-2', 'ring-brand-navy');
+          });
+          var card = btn.closest('[data-family]');
+          card.classList.remove('ring-brand-orange');
+          card.classList.add('ring-2', 'ring-brand-navy');
+        });
+
+        render();
+      }
+
+      init();
+    })();
+  </script>
+

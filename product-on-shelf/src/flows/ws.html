@@ -1,0 +1,127 @@
+  <!-- ===================== Windows Server flow ===================== -->
+  <script>
+    /**
+     * Windows Server 2025. MOCK PRICING, REAL licensing logic. Microsoft licenses Windows Server
+     * per physical core, sold in 2-core packs, with a 16-core-per-server minimum (and 8-core-per-
+     * processor minimum). Standard covers up to 2 OSEs (VMs) per fully-licensed server — more VMs
+     * re-license all cores again (stack per 2 VMs); Datacenter is unlimited VMs per host. CALs
+     * (User or Device) are required on top. The two cards are the editions; cheapest = best value,
+     * which genuinely tracks the Standard↔Datacenter break-even by VM density. priceOption() seam.
+     */
+    (function () {
+      // --- Pricing source: window.PRICING (Sheet) when present, else mock fallback. ---
+      var P  = window.PRICING || {};
+      var PX = P.winsvr || {};
+
+      var MIN_CORES    = 16;   // per server
+      var MIN_PER_PROC = 8;    // per processor
+      var PACK_PRICE   = PX.pack_price || { standard: 4500, datacenter: 26000 };  // per 2-core pack, THB (mock)
+      var CAL_PRICE    = PX.cal_price  || { user: 1400, device: 1200 };            // per CAL, THB (mock)
+      var CAL_LABEL    = { user: 'User', device: 'Device' };
+      var META = {
+        standard:   { name: 'Windows Server 2025 Standard',   note: 'Core-based · up to 2 VMs per license', icon: 'server-cog' },
+        datacenter: { name: 'Windows Server 2025 Datacenter', note: 'Core-based · unlimited VMs per host',   icon: 'server-cog' }
+      };
+      var BUFFER = (P.knobs && P.knobs.buffer != null) ? P.knobs.buffer : 1.20;
+
+      var thb     = function (n) { return '฿' + Math.round(n).toLocaleString('en-US'); };
+      var round1k = function (n) { return Math.round(n / 1000) * 1000; };
+      var el      = function (id) { return document.getElementById(id); };
+
+      // Billable cores per server: at least the physical cores, 8 per processor, and 16 overall.
+      function billableCores(inp) {
+        return Math.max(inp.cores, MIN_PER_PROC * inp.procs, MIN_CORES);
+      }
+
+      // The single pricing seam — real Windows core + CAL licensing.
+      function priceOption(edition, inp) {
+        var billable = billableCores(inp);
+        // Standard re-licenses every 2 OSEs; Datacenter is unlimited per host.
+        var sets = (edition === 'datacenter') ? 1 : Math.max(1, Math.ceil(inp.vms / 2));
+        var packsPerServer = (billable * sets) / 2;            // 2-core packs
+        var packs    = packsPerServer * inp.servers;
+        var coreCost = packs * PACK_PRICE[edition];
+        var calCost  = inp.cals * CAL_PRICE[inp.caltype];
+        return { billable: billable, sets: sets, packs: packs, coreCost: coreCost, calCost: calCost,
+                 total: round1k((coreCost + calCost) * BUFFER) };
+      }
+
+      function readInputs() {
+        return {
+          servers: Math.max(1, parseInt(el('ws-servers').value, 10) || 1),
+          cores:   Math.max(1, parseInt(el('ws-cores').value, 10) || 1),
+          procs:   Math.max(1, parseInt(el('ws-procs').value, 10) || 1),
+          vms:     Math.max(1, parseInt(el('ws-vms').value, 10) || 1),
+          caltype: el('ws-caltype').value,
+          cals:    Math.max(0, parseInt(el('ws-cals').value, 10) || 0)
+        };
+      }
+
+      function row(label, value) {
+        return '<div class="flex justify-between"><span class="text-muted-foreground">' + label +
+               '</span><span class="tabular-nums">' + value + '</span></div>';
+      }
+
+      function cardHtml(edition, r, inp, recommended) {
+        var M = META[edition];
+        return '' +
+          '<div class="card flex flex-col' + (recommended ? ' ring-2 ring-brand-orange' : '') + '" data-vendor="' + edition + '">' +
+            '<div class="card-header">' +
+              '<div class="flex items-start justify-between gap-2">' +
+                '<div class="flex items-center gap-2">' +
+                  '<i data-lucide="' + M.icon + '" class="h-4 w-4 text-brand-navy"></i>' +
+                  '<div class="card-title">' + M.name + '</div>' +
+                '</div>' +
+                (recommended ? '<span class="badge badge-brand">Best value</span>' : '') +
+              '</div>' +
+              '<div class="card-desc pt-0.5">' + M.note + '</div>' +
+              '<div class="flex items-center gap-2 pt-1">' +
+                '<span class="badge badge-secondary">' + r.billable + ' cores/server</span>' +
+                '<span class="text-xs text-muted-foreground">' + inp.servers + ' servers · ' + inp.vms + ' VMs ea' +
+                  (edition === 'standard' && r.sets > 1 ? ' · ×' + r.sets + ' stack' : '') + '</span>' +
+              '</div>' +
+            '</div>' +
+            '<div class="card-content flex-1 space-y-1.5 text-sm">' +
+              row('Core licenses · ' + r.packs + ' × 2-core pack', thb(r.coreCost)) +
+              row('CALs · ' + inp.cals + ' ' + CAL_LABEL[inp.caltype], thb(r.calCost)) +
+            '</div>' +
+            '<div class="mt-auto flex flex-col gap-3 border-t border-border p-6 pt-4">' +
+              '<div class="flex items-baseline justify-between">' +
+                '<span class="text-sm text-muted-foreground">Est. total</span>' +
+                '<span class="text-xl font-semibold text-brand-navy tabular-nums">' + thb(r.total) + '</span>' +
+              '</div>' +
+              '<button class="btn btn-primary w-full" data-select="' + edition + '">Add to estimate</button>' +
+            '</div>' +
+          '</div>';
+      }
+
+      function render() {
+        var inp = readInputs();
+        var billable = billableCores(inp);
+        el('ws-sizing').innerHTML =
+          '<div class="rounded-md border border-border bg-card px-4 py-2.5 text-sm">' +
+            '<span class="font-medium tabular-nums">' + inp.servers + ' servers · ' + billable + ' cores/server</span>' +
+            '<span class="text-muted-foreground"> (16-core min) · ' + inp.vms + ' VMs ea · ' +
+              inp.cals + ' ' + CAL_LABEL[inp.caltype] + ' CALs</span>' +
+          '</div>';
+        var editions = ['standard', 'datacenter'];
+        var results = editions.map(function (e) { return { e: e, r: priceOption(e, inp) }; });
+        var cheapest = results.reduce(function (a, b) { return b.r.total < a.r.total ? b : a; });
+        el('ws-options').innerHTML = results.map(function (x) { return cardHtml(x.e, x.r, inp, x === cheapest); }).join('');
+        lucide.createIcons();
+      }
+
+      function init() {
+        document.querySelectorAll('#ws-servers, #ws-cores, #ws-procs, #ws-vms, #ws-caltype, #ws-cals')
+          .forEach(function (n) { n.addEventListener('input', render); });
+        el('ws-options').addEventListener('click', function (e) {
+          var btn = e.target.closest('[data-select]'); if (!btn) return;
+          el('ws-options').querySelectorAll('[data-vendor]').forEach(function (c) { c.classList.remove('ring-2', 'ring-brand-navy'); });
+          var card = btn.closest('[data-vendor]'); card.classList.remove('ring-brand-orange'); card.classList.add('ring-2', 'ring-brand-navy');
+        });
+        render();
+      }
+      init();
+    })();
+  </script>
+

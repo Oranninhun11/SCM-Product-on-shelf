@@ -1,0 +1,163 @@
+          <section data-view="storage" hidden>
+            <div class="flex items-start justify-between gap-4">
+              <div>
+                <div class="mb-1 flex items-center gap-2 text-sm text-muted-foreground">
+                  <span class="cursor-pointer hover:text-foreground" data-nav="home">Start estimate</span>
+                  <i data-lucide="chevron-right" class="h-3.5 w-3.5"></i>
+                  <span class="text-foreground">Storage</span>
+                </div>
+                <h1 class="text-2xl font-semibold tracking-tight">Storage</h1>
+              </div>
+              <span class="badge badge-secondary shrink-0">Mock pricing</span>
+            </div>
+
+            <div class="mt-5" data-tabs>
+              <div class="tablist">
+                <button class="tab active" data-tab="st-refresh">Refresh</button>
+                <button class="tab" data-tab="st-new">New install</button>
+              </div>
+
+              <!-- Project: Refresh (Dell PowerStore / NetApp AFF) -->
+              <div class="mt-5" data-panel="st-refresh">
+
+                <!-- Requirements -->
+                <div class="card mt-6">
+                  <div class="card-header"><div class="card-title">Requirements</div></div>
+                  <div class="card-content grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    <div class="grid gap-1.5">
+                      <label class="label" for="st-model">Existing array model</label>
+                      <select id="st-model" class="select"></select>
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label">Detected</label>
+                      <div id="st-detected" class="input flex items-center bg-muted/40 text-muted-foreground">&mdash;</div>
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="st-reqtb">Required usable (TB)</label>
+                      <input id="st-reqtb" type="number" min="1" value="40" class="input" />
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="st-units">Units of devices</label>
+                      <input id="st-units" type="number" min="1" value="1" class="input" />
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="st-tier">Performance tier</label>
+                      <select id="st-tier" class="select">
+                        <option value="capacity">Capacity &mdash; hybrid NL-SAS</option>
+                        <option value="general" selected>General &mdash; hybrid + flash cache</option>
+                        <option value="performance">Performance &mdash; all-flash NVMe</option>
+                      </select>
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="st-sow">SOW scope</label>
+                      <select id="st-sow" class="select">
+                        <option value="basic">Basic &mdash; install &amp; present LUNs</option>
+                        <option value="standard" selected>Standard &mdash; migrate data + cutover</option>
+                        <option value="complex">Complex &mdash; multi-site + replication</option>
+                      </select>
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="st-years">Support term</label>
+                      <select id="st-years" class="select">
+                        <option value="1">1 year</option>
+                        <option value="3" selected>3 years</option>
+                        <option value="5">5 years</option>
+                      </select>
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="st-sla">SLA tier</label>
+                      <select id="st-sla" class="select">
+                        <option value="nbd" selected>NBD (Next Business Day)</option>
+                        <option value="8x5x4">8&times;5&times;4</option>
+                        <option value="24x7x4">24&times;7&times;4</option>
+                      </select>
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="st-location">Location</label>
+                      <select id="st-location" class="select">
+                        <option value="bkk" selected>Bangkok / metro</option>
+                        <option value="upcountry">Upcountry</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Results -->
+                <div class="mt-6 flex flex-wrap items-baseline justify-between gap-2">
+                  <h2 class="text-lg font-semibold tracking-tight">Replacement options</h2>
+                  <span class="text-xs text-muted-foreground">THB &middot; incl. 20% buffer &middot; sized to required TB &times;1.2</span>
+                </div>
+                <div id="st-sizing" class="mt-2"></div>
+                <div id="st-options" class="mt-3 grid gap-4 sm:grid-cols-2"></div>
+              </div><!-- /panel st-refresh -->
+
+              <!-- Project: New install -->
+              <!-- Project: New install -->
+              <div class="mt-5 hidden" data-panel="st-new">
+
+                <!-- Requirements -->
+                <div class="card mt-6">
+                  <div class="card-header"><div class="card-title">Requirements</div></div>
+                  <div class="card-content grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    <div class="grid gap-1.5">
+                      <label class="label" for="stn-reqtb">Required usable (TB)</label>
+                      <input id="stn-reqtb" type="number" min="1" value="40" class="input" />
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="stn-units">Units of devices</label>
+                      <input id="stn-units" type="number" min="1" value="1" class="input" />
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="stn-tier">Performance tier</label>
+                      <select id="stn-tier" class="select">
+                        <option value="capacity">Capacity &mdash; hybrid NL-SAS</option>
+                        <option value="general" selected>General &mdash; hybrid + flash cache</option>
+                        <option value="performance">Performance &mdash; all-flash NVMe</option>
+                      </select>
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="stn-sow">SOW scope</label>
+                      <select id="stn-sow" class="select">
+                        <option value="basic">Basic &mdash; install &amp; present LUNs</option>
+                        <option value="standard" selected>Standard &mdash; provision + onboard hosts</option>
+                        <option value="complex">Complex &mdash; multi-site + replication</option>
+                      </select>
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="stn-years">Support term</label>
+                      <select id="stn-years" class="select">
+                        <option value="1">1 year</option>
+                        <option value="3" selected>3 years</option>
+                        <option value="5">5 years</option>
+                      </select>
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="stn-sla">SLA tier</label>
+                      <select id="stn-sla" class="select">
+                        <option value="nbd" selected>NBD (Next Business Day)</option>
+                        <option value="8x5x4">8&times;5&times;4</option>
+                        <option value="24x7x4">24&times;7&times;4</option>
+                      </select>
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="stn-location">Location</label>
+                      <select id="stn-location" class="select">
+                        <option value="bkk" selected>Bangkok / metro</option>
+                        <option value="upcountry">Upcountry</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Results -->
+                <div class="mt-6 flex flex-wrap items-baseline justify-between gap-2">
+                  <h2 class="text-lg font-semibold tracking-tight">New install options</h2>
+                  <span class="text-xs text-muted-foreground">THB &middot; incl. 20% buffer &middot; sized to required TB &times;1.2</span>
+                </div>
+                <div id="stn-sizing" class="mt-2"></div>
+                <div id="stn-options" class="mt-3 grid gap-4 sm:grid-cols-2"></div>
+              </div><!-- /panel st-new -->
+            </div><!-- /tabs -->
+          </section>
+
+          <!-- ---- View: Backup & DR (Phase 3 flow) ---- -->

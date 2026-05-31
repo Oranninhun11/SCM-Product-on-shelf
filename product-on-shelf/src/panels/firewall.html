@@ -1,0 +1,145 @@
+          <section data-view="firewall" hidden>
+            <div class="flex items-start justify-between gap-4">
+              <div>
+                <div class="mb-1 flex items-center gap-2 text-sm text-muted-foreground">
+                  <span class="cursor-pointer hover:text-foreground" data-nav="home">Start estimate</span>
+                  <i data-lucide="chevron-right" class="h-3.5 w-3.5"></i>
+                  <span class="text-foreground">Firewall</span>
+                </div>
+                <h1 class="text-2xl font-semibold tracking-tight">Firewall</h1>
+              </div>
+              <span class="badge badge-secondary shrink-0">Mock pricing</span>
+            </div>
+
+            <div class="mt-5" data-tabs>
+              <div class="tablist">
+                <button class="tab active" data-tab="fw-replacement">Replacement</button>
+                <button class="tab" data-tab="fw-new">New install</button>
+              </div>
+
+              <!-- Project: Replacement (Fortinet / Palo Alto) -->
+              <div class="mt-5" data-panel="fw-replacement">
+
+            <!-- Requirements -->
+            <div class="card mt-6">
+              <div class="card-header"><div class="card-title">Requirements</div></div>
+              <div class="card-content grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <div class="grid gap-1.5">
+                  <label class="label" for="fw-model">Existing firewall model</label>
+                  <select id="fw-model" class="select"></select>
+                </div>
+                <div class="grid gap-1.5">
+                  <label class="label">Detected throughput</label>
+                  <div id="fw-throughput" class="input flex items-center bg-muted/40 text-muted-foreground">&mdash;</div>
+                </div>
+                <div class="grid gap-1.5">
+                  <label class="label" for="fw-units">Units of devices</label>
+                  <input id="fw-units" type="number" min="1" value="1" class="input" />
+                </div>
+                <div class="grid gap-1.5">
+                  <label class="label" for="fw-sow">SOW scope</label>
+                  <select id="fw-sow" class="select">
+                    <option value="basic">Basic &mdash; swap &amp; config</option>
+                    <option value="standard" selected>Standard &mdash; migrate policies + HA</option>
+                    <option value="complex">Complex &mdash; full redesign + integration</option>
+                  </select>
+                </div>
+                <div class="grid gap-1.5">
+                  <label class="label" for="fw-years">Support term</label>
+                  <select id="fw-years" class="select">
+                    <option value="1">1 year</option>
+                    <option value="3" selected>3 years</option>
+                    <option value="5">5 years</option>
+                  </select>
+                </div>
+                <div class="grid gap-1.5">
+                  <label class="label" for="fw-sla">SLA tier</label>
+                  <select id="fw-sla" class="select">
+                    <option value="nbd" selected>NBD (Next Business Day)</option>
+                    <option value="8x5x4">8&times;5&times;4</option>
+                    <option value="24x7x4">24&times;7&times;4</option>
+                  </select>
+                </div>
+                <div class="grid gap-1.5">
+                  <label class="label" for="fw-location">Location</label>
+                  <select id="fw-location" class="select">
+                    <option value="bkk" selected>Bangkok / metro</option>
+                    <option value="upcountry">Upcountry</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- Results -->
+            <div class="mt-6 flex flex-wrap items-baseline justify-between gap-2">
+              <h2 class="text-lg font-semibold tracking-tight">Replacement options</h2>
+              <span class="text-xs text-muted-foreground">THB &middot; incl. 20% buffer &middot; sized to &ge; existing throughput &times;1.2</span>
+            </div>
+            <div id="fw-options" class="mt-3 grid gap-4 sm:grid-cols-2"></div>
+              </div><!-- /panel fw-replacement -->
+
+              <!-- Project: New install -->
+              <!-- Project: New install -->
+              <div class="mt-5 hidden" data-panel="fw-new">
+
+                <!-- Requirements -->
+                <div class="card mt-6">
+                  <div class="card-header"><div class="card-title">Requirements</div></div>
+                  <div class="card-content grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    <div class="grid gap-1.5">
+                      <label class="label" for="fwn-tp">Required throughput (Gbps)</label>
+                      <input id="fwn-tp" type="number" min="1" value="10" class="input" />
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="fwn-deploy">Deployment</label>
+                      <select id="fwn-deploy" class="select">
+                        <option value="1" selected>Single appliance</option>
+                        <option value="2">HA pair (active-passive)</option>
+                      </select>
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="fwn-sow">SOW scope</label>
+                      <select id="fwn-sow" class="select">
+                        <option value="basic">Basic &mdash; deploy &amp; basic policy</option>
+                        <option value="standard" selected>Standard &mdash; policy + VPN + routing</option>
+                        <option value="complex">Complex &mdash; multi-site + HA + SD-WAN</option>
+                      </select>
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="fwn-years">Support term</label>
+                      <select id="fwn-years" class="select">
+                        <option value="1">1 year</option>
+                        <option value="3" selected>3 years</option>
+                        <option value="5">5 years</option>
+                      </select>
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="fwn-sla">SLA tier</label>
+                      <select id="fwn-sla" class="select">
+                        <option value="nbd" selected>NBD (Next Business Day)</option>
+                        <option value="8x5x4">8&times;5&times;4</option>
+                        <option value="24x7x4">24&times;7&times;4</option>
+                      </select>
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="fwn-location">Location</label>
+                      <select id="fwn-location" class="select">
+                        <option value="bkk" selected>Bangkok / metro</option>
+                        <option value="upcountry">Upcountry</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Results -->
+                <div class="mt-6 flex flex-wrap items-baseline justify-between gap-2">
+                  <h2 class="text-lg font-semibold tracking-tight">New install options</h2>
+                  <span class="text-xs text-muted-foreground">THB &middot; incl. 20% buffer &middot; sized to required Gbps &times;1.2</span>
+                </div>
+                <div id="fwn-sizing" class="mt-2"></div>
+                <div id="fwn-options" class="mt-3 grid gap-4 sm:grid-cols-2"></div>
+              </div><!-- /panel fw-new -->
+            </div><!-- /tabs -->
+          </section>
+
+          <!-- ---- View: Network Switch (flow) ---- -->

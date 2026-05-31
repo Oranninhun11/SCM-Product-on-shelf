@@ -1,0 +1,119 @@
+  <!-- ===================== Backup & DR flow ===================== -->
+  <script>
+    /**
+     * Backup & DR — New / Expand project.
+     *
+     * MOCK DATA + MOCK PRICING (same pattern as Storage). Sizes a dedup repository from
+     * protected TB + retention + daily change rate (×1.2 growth buffer), picks the matching
+     * appliance, and prices two full stacks (Veeam + Dell PowerProtect / Commvault + HPE
+     * StoreOnce). Backup software + DRaaS scale per protected TB (that is how they are sold);
+     * implementation + appliance support stay flat. priceOption() is the single seam.
+     */
+    (function () {
+      // Software-only model: per-instance license/yr (mock), tunable later from the Sheet.
+      // --- Pricing source: window.PRICING (Sheet) when present, else mock fallback. ---
+      var P  = window.PRICING || {};
+      var PX = P.backup || {};
+
+      var META = PX.meta || {
+        veeam:     { name: 'Veeam Data Platform', icon: 'database-backup', perInstanceYr: 18000 },
+        commvault: { name: 'Commvault Cloud',     icon: 'database-backup', perInstanceYr: 22000 }
+      };
+      var EDITION_MULT  = PX.edition_mult || { standard: 1.0, enterprise: 1.5 };
+      var EDITION_LABEL = { standard: 'Standard', enterprise: 'Enterprise' };
+      var BUFFER        = (P.knobs && P.knobs.buffer != null) ? P.knobs.buffer : 1.20;
+
+      var thb     = function (n) { return '฿' + Math.round(n).toLocaleString('en-US'); };
+      var round1k = function (n) { return Math.round(n / 1000) * 1000; };
+      var el      = function (id) { return document.getElementById(id); };
+
+      // The single pricing seam — software license only, per instance × edition × term.
+      function priceOption(family, inp) {
+        var F = META[family];
+        var license = F.perInstanceYr * EDITION_MULT[inp.edition] * inp.units * inp.years;
+        return { license: license, total: round1k(license * BUFFER) };
+      }
+
+      function readInputs() {
+        return {
+          units:   Math.max(1, parseInt(el('bk-units').value, 10) || 1),
+          edition: el('bk-edition').value,
+          years:   parseInt(el('bk-years').value, 10)
+        };
+      }
+
+      function row(label, value) {
+        return '<div class="flex justify-between"><span class="text-muted-foreground">' + label +
+               '</span><span class="tabular-nums">' + value + '</span></div>';
+      }
+
+      function cardHtml(family, r, inp, recommended) {
+        return '' +
+          '<div class="card flex flex-col' + (recommended ? ' ring-2 ring-brand-orange' : '') + '" data-vendor="' + family + '">' +
+            '<div class="card-header">' +
+              '<div class="flex items-start justify-between gap-2">' +
+                '<div class="flex items-center gap-2">' +
+                  '<i data-lucide="' + META[family].icon + '" class="h-4 w-4 text-brand-navy"></i>' +
+                  '<div class="card-title">' + META[family].name + '</div>' +
+                '</div>' +
+                (recommended ? '<span class="badge badge-brand">Best value</span>' : '') +
+              '</div>' +
+              '<div class="card-desc pt-0.5">' + EDITION_LABEL[inp.edition] + ' edition</div>' +
+              '<div class="flex items-center gap-2 pt-1">' +
+                '<span class="badge badge-secondary">' + inp.units + ' instance' + (inp.units > 1 ? 's' : '') + '</span>' +
+                '<span class="text-xs text-muted-foreground">software license</span>' +
+              '</div>' +
+            '</div>' +
+            '<div class="card-content flex-1 space-y-1.5 text-sm">' +
+              row('Software license · ' + inp.units + ' inst · ' + inp.years + ' yr · ' + EDITION_LABEL[inp.edition], thb(r.license)) +
+            '</div>' +
+            '<div class="mt-auto flex flex-col gap-3 border-t border-border p-6 pt-4">' +
+              '<div class="flex items-baseline justify-between">' +
+                '<span class="text-sm text-muted-foreground">Est. total</span>' +
+                '<span class="text-xl font-semibold text-brand-navy tabular-nums">' + thb(r.total) + '</span>' +
+              '</div>' +
+              '<button class="btn btn-primary w-full" data-select="' + family + '">Add to estimate</button>' +
+            '</div>' +
+          '</div>';
+      }
+
+      function render() {
+        var inp = readInputs();
+        el('bk-sizing').innerHTML =
+          '<div class="rounded-md border border-border bg-card px-4 py-2.5 text-sm">' +
+            '<span class="font-medium tabular-nums">' + inp.units + ' instance' + (inp.units > 1 ? 's' : '') + '</span>' +
+            '<span class="text-muted-foreground"> · ' + EDITION_LABEL[inp.edition] + ' edition · ' + inp.years + '-yr license</span>' +
+          '</div>';
+
+        var families = ['veeam', 'commvault'];
+        var results = families.map(function (f) { return { f: f, r: priceOption(f, inp) }; });
+        var cheapest = results.reduce(function (a, b) { return b.r.total < a.r.total ? b : a; });
+
+        el('bk-options').innerHTML = results.map(function (x) {
+          return cardHtml(x.f, x.r, inp, x === cheapest);
+        }).join('');
+        lucide.createIcons();
+      }
+
+      function init() {
+        document.querySelectorAll('#bk-units, #bk-edition, #bk-years')
+          .forEach(function (n) { n.addEventListener('input', render); });
+
+        el('bk-options').addEventListener('click', function (e) {
+          var btn = e.target.closest('[data-select]');
+          if (!btn) return;
+          el('bk-options').querySelectorAll('[data-vendor]').forEach(function (c) {
+            c.classList.remove('ring-2', 'ring-brand-navy');
+          });
+          var card = btn.closest('[data-vendor]');
+          card.classList.remove('ring-brand-orange');
+          card.classList.add('ring-2', 'ring-brand-navy');
+        });
+
+        render();
+      }
+
+      init();
+    })();
+  </script>
+

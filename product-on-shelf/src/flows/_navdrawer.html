@@ -1,0 +1,24 @@
+  <!-- ===================== Mobile nav drawer ===================== -->
+  <script>
+    /* Below md the sidebar is an off-canvas drawer toggled by #nav-toggle; on md+ it's a
+       static column (md:translate-x-0 wins, so close() is harmless there). */
+    (function () {
+      var sidebar  = document.getElementById('sidebar');
+      var backdrop = document.getElementById('nav-backdrop');
+      var toggle   = document.getElementById('nav-toggle');
+      if (!sidebar || !backdrop || !toggle) return;
+      function open()  { sidebar.classList.remove('-translate-x-full'); backdrop.classList.remove('hidden'); toggle.setAttribute('aria-expanded', 'true'); }
+      function close() { sidebar.classList.add('-translate-x-full');    backdrop.classList.add('hidden');    toggle.setAttribute('aria-expanded', 'false'); }
+      toggle.addEventListener('click', function () {
+        if (sidebar.classList.contains('-translate-x-full')) open(); else close();
+      });
+      backdrop.addEventListener('click', close);
+      // Picking a destination closes the drawer (mobile only — md+ stays static).
+      document.addEventListener('click', function (e) {
+        if (e.target.closest('[data-nav]') && window.matchMedia('(max-width: 767px)').matches) close();
+      });
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
+      window.matchMedia('(min-width: 768px)').addEventListener('change', close); // reset on breakpoint cross
+    })();
+  </script>
+

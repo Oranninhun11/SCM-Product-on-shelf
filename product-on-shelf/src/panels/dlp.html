@@ -1,0 +1,73 @@
+          <section data-view="dlp" hidden>
+            <div class="flex items-start justify-between gap-4">
+              <div>
+                <div class="mb-1 flex items-center gap-2 text-sm text-muted-foreground">
+                  <span class="cursor-pointer hover:text-foreground" data-nav="home">Start estimate</span>
+                  <i data-lucide="chevron-right" class="h-3.5 w-3.5"></i>
+                  <span class="text-foreground">DLP</span>
+                </div>
+                <h1 class="text-2xl font-semibold tracking-tight">DLP</h1>
+              </div>
+              <span class="badge badge-secondary shrink-0">Mock pricing</span>
+            </div>
+            <div class="mt-5" data-tabs>
+              <div class="tablist"><button class="tab active" data-tab="dlp-lic">Licensing</button></div>
+              <div class="mt-5" data-panel="dlp-lic">
+                <div class="card mt-6">
+                  <div class="card-header"><div class="card-title">Requirements</div></div>
+                  <div class="card-content grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    <div class="grid gap-1.5">
+                      <label class="label" for="dlp-count">Units of users</label>
+                      <input id="dlp-count" type="number" min="1" value="200" class="input" />
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="dlp-coverage">Coverage</label>
+                      <select id="dlp-coverage" class="select">
+                        <option value="endpoint" selected>Endpoint</option>
+                        <option value="network">Network</option>
+                        <option value="both">Endpoint + Network</option>
+                      </select>
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="dlp-deploy">Deployment</label>
+                      <select id="dlp-deploy" class="select">
+                        <option value="new" selected>New deployment</option>
+                        <option value="renewal">Renewal</option>
+                      </select>
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="dlp-years">Subscription term</label>
+                      <select id="dlp-years" class="select">
+                        <option value="1">1 year</option>
+                        <option value="3" selected>3 years</option>
+                        <option value="5">5 years</option>
+                      </select>
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="dlp-sow">SOW scope</label>
+                      <select id="dlp-sow" class="select">
+                        <option value="basic">Basic &mdash; deploy + default rules</option>
+                        <option value="standard" selected>Standard &mdash; policy + classification</option>
+                        <option value="complex">Complex &mdash; data discovery + workflow</option>
+                      </select>
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="dlp-location">Location</label>
+                      <select id="dlp-location" class="select">
+                        <option value="bkk" selected>Bangkok / metro</option>
+                        <option value="upcountry">Upcountry</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+                <div class="mt-6 flex flex-wrap items-baseline justify-between gap-2">
+                  <h2 class="text-lg font-semibold tracking-tight">DLP options</h2>
+                  <span class="text-xs text-muted-foreground">THB &middot; incl. 20% buffer &middot; per user &times; term</span>
+                </div>
+                <div id="dlp-sizing" class="mt-2"></div>
+                <div id="dlp-options" class="mt-3 grid gap-4 sm:grid-cols-2"></div>
+              </div>
+            </div>
+          </section>
+
+          <!-- ---- View: Captive portal ---- -->

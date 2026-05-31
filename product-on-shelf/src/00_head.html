@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<!--
+  Product on Shelf — Presale ballpark price list (Phase 1: web shell / design system)
+  Self-contained on purpose: renders in any browser AND drops into Apps Script
+  HTML Service as-is (served via HtmlService.createHtmlOutputFromFile in Code.gs).
+  Aesthetic: shadcn/ui "zinc" theme (https://blocks.so) via Tailwind Play CDN.
+-->
+<html lang="en" class="h-full">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Product on Shelf</title>
+
+  <!-- Inter font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- Tailwind (Play CDN — no build step, fine for an internal Phase 1 tool) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            border: 'hsl(var(--border) / <alpha-value>)',
+            input: 'hsl(var(--input) / <alpha-value>)',
+            ring: 'hsl(var(--ring) / <alpha-value>)',
+            background: 'hsl(var(--background) / <alpha-value>)',
+            foreground: 'hsl(var(--foreground) / <alpha-value>)',
+            primary: { DEFAULT: 'hsl(var(--primary) / <alpha-value>)', foreground: 'hsl(var(--primary-foreground) / <alpha-value>)' },
+            secondary: { DEFAULT: 'hsl(var(--secondary) / <alpha-value>)', foreground: 'hsl(var(--secondary-foreground) / <alpha-value>)' },
+            muted: { DEFAULT: 'hsl(var(--muted) / <alpha-value>)', foreground: 'hsl(var(--muted-foreground) / <alpha-value>)' },
+            accent: { DEFAULT: 'hsl(var(--accent) / <alpha-value>)', foreground: 'hsl(var(--accent-foreground) / <alpha-value>)' },
+            card: { DEFAULT: 'hsl(var(--card) / <alpha-value>)', foreground: 'hsl(var(--card-foreground) / <alpha-value>)' },
+            brand: { navy: 'hsl(var(--brand-navy) / <alpha-value>)', orange: 'hsl(var(--brand-orange) / <alpha-value>)' },
+          },
+          borderRadius: {
+            lg: 'var(--radius)',
+            md: 'calc(var(--radius) - 2px)',
+            sm: 'calc(var(--radius) - 4px)',
+          },
+          fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'] },
+        },
+      },
+    };
+  </script>
+
+  <!-- Lucide icons -->
+  <script src="https://unpkg.com/lucide@1.17.0"></script>
+
+  <!-- SheetJS — client-side .xlsx generation for the Create-quotation export (no build step) -->
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+
+  <!-- shadcn "zinc" design tokens + reusable component classes -->
+  <style type="text/tailwindcss">
+    :root {
+      --background: 0 0% 100%;
+      --foreground: 240 10% 3.9%;
+      --card: 0 0% 100%;
+      --card-foreground: 240 10% 3.9%;
+      --primary: 224 44% 21%;          /* SCM navy  #1f2a4d */
+      --primary-foreground: 0 0% 98%;
+      --secondary: 240 4.8% 95.9%;
+      --secondary-foreground: 240 5.9% 10%;
+      --muted: 240 4.8% 95.9%;
+      --muted-foreground: 240 3.8% 46.1%;
+      --accent: 240 4.8% 95.9%;
+      --accent-foreground: 240 5.9% 10%;
+      --border: 240 5.9% 90%;
+      --input: 240 5.9% 90%;
+      --ring: 224 44% 21%;             /* navy focus ring */
+      --radius: 0.5rem;
+      /* SCM B2B brand accents */
+      --brand-navy: 224 44% 21%;       /* #1f2a4d */
+      --brand-orange: 15 87% 55%;      /* #f15a28 */
+    }
+
+    @layer base {
+      body { @apply bg-background text-foreground font-sans antialiased; }
+    }
+
+    @layer components {
+      /* Buttons */
+      .btn {
+        @apply inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md
+               text-sm font-medium transition-colors h-9 px-4
+               focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2
+               disabled:pointer-events-none disabled:opacity-50;
+      }
+      .btn-primary   { @apply bg-primary text-primary-foreground hover:bg-primary/90; }
+      .btn-secondary { @apply bg-secondary text-secondary-foreground hover:bg-secondary/80; }
+      .btn-outline   { @apply border border-input bg-background hover:bg-accent hover:text-accent-foreground; }
+      .btn-ghost     { @apply hover:bg-accent hover:text-accent-foreground; }
+      .btn-sm        { @apply h-8 px-3 text-xs; }
+      .btn-lg        { @apply h-10 px-6; }
+      .btn-icon      { @apply h-9 w-9 px-0; }
+
+      /* Cards */
+      .card          { @apply rounded-lg border border-border bg-card text-card-foreground shadow-sm; }
+      .card-header   { @apply flex flex-col space-y-1.5 p-6; }
+      .card-title    { @apply text-base font-semibold leading-none tracking-tight; }
+      .card-desc     { @apply text-sm text-muted-foreground; }
+      .card-content  { @apply p-6 pt-0; }
+      .card-footer   { @apply flex items-center p-6 pt-0; }
+
+      /* Form controls */
+      .label { @apply text-sm font-medium leading-none; }
+      .input {
+        @apply flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm
+               placeholder:text-muted-foreground
+               focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring;
+      }
+      .select { @apply input appearance-none bg-no-repeat pr-8; }
+
+      /* Badges */
+      .badge          { @apply inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors; }
+      .badge-default  { @apply border-transparent bg-primary text-primary-foreground; }
+      .badge-secondary{ @apply border-transparent bg-secondary text-secondary-foreground; }
+      .badge-outline  { @apply text-foreground; }
+      .badge-brand    { @apply border-transparent bg-brand-orange text-white; }
+
+      /* Sidebar nav */
+      .nav-item {
+        @apply flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground
+               cursor-pointer transition-colors hover:bg-accent hover:text-accent-foreground;
+      }
+      .nav-item.active { @apply bg-accent text-accent-foreground; }
+      .nav-item.active i { @apply text-brand-orange; }   /* orange accent on active item */
+      .nav-item i { @apply h-4 w-4; }
+
+      .section-label { @apply px-3 pt-4 pb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground/70; }
+
+      /* Tabs — project switcher within a device page */
+      .tablist { @apply inline-flex items-center gap-1 rounded-lg bg-muted p-1; }
+      .tab { @apply inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors cursor-pointer; }
+      .tab.active { @apply bg-background text-foreground shadow-sm; }
+    }
+  </style>
+</head>

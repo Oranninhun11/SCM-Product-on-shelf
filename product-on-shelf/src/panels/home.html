@@ -1,0 +1,151 @@
+          <section data-view="home">
+            <h1 class="text-2xl font-semibold tracking-tight">Start a new estimate</h1>
+            <p class="mt-1 text-sm text-muted-foreground">
+              Pick a product, then a project — get a ballpark price in seconds, no vendor round-trip needed.
+              Add options to a <span class="font-medium text-foreground">Custom estimate</span> to bundle a whole deal.
+            </p>
+            <h2 class="mt-8 text-lg font-semibold tracking-tight">Hardware</h2>
+            <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <!-- product cards (whole card routes via data-nav) -->
+              <div class="card cursor-pointer transition hover:shadow-md hover:border-brand-orange/40" data-nav="firewall">
+                <div class="card-header">
+                  <div class="flex h-10 w-10 items-center justify-center rounded-md bg-secondary"><i data-lucide="shield" class="h-5 w-5"></i></div>
+                  <div class="card-title pt-2">Firewall</div>
+                  <div class="card-desc">Replacement · New install. Fortinet / Palo Alto.</div>
+                </div>
+              </div>
+              <div class="card cursor-pointer transition hover:shadow-md hover:border-brand-orange/40" data-nav="switch">
+                <div class="card-header">
+                  <div class="flex h-10 w-10 items-center justify-center rounded-md bg-secondary"><i data-lucide="network" class="h-5 w-5"></i></div>
+                  <div class="card-title pt-2">Network Switch</div>
+                  <div class="card-desc">Replacement · New install. Cisco / Aruba.</div>
+                </div>
+              </div>
+              <div class="card cursor-pointer transition hover:shadow-md hover:border-brand-orange/40" data-nav="hci">
+                <div class="card-header">
+                  <div class="flex h-10 w-10 items-center justify-center rounded-md bg-secondary"><i data-lucide="server" class="h-5 w-5"></i></div>
+                  <div class="card-title pt-2">Server / HCI</div>
+                  <div class="card-desc">Refresh · New install. Node sizing, N+1 + buffer.</div>
+                </div>
+              </div>
+              <div class="card cursor-pointer transition hover:shadow-md hover:border-brand-orange/40" data-nav="storage">
+                <div class="card-header">
+                  <div class="flex h-10 w-10 items-center justify-center rounded-md bg-secondary"><i data-lucide="hard-drive" class="h-5 w-5"></i></div>
+                  <div class="card-title pt-2">Storage</div>
+                  <div class="card-desc">Refresh · New install. Usable TB + IOPS → array.</div>
+                </div>
+              </div>
+              <div class="card cursor-pointer transition hover:shadow-md hover:border-brand-orange/40" data-nav="wireless">
+                <div class="card-header">
+                  <div class="flex h-10 w-10 items-center justify-center rounded-md bg-secondary"><i data-lucide="wifi" class="h-5 w-5"></i></div>
+                  <div class="card-title pt-2">Wireless (AP/WLC)</div>
+                  <div class="card-desc">APs + controller / cloud. Cisco / Aruba.</div>
+                </div>
+              </div>
+              <div class="card cursor-pointer transition hover:shadow-md hover:border-brand-orange/40" data-nav="router">
+                <div class="card-header">
+                  <div class="flex h-10 w-10 items-center justify-center rounded-md bg-secondary"><i data-lucide="route" class="h-5 w-5"></i></div>
+                  <div class="card-title pt-2">Router / SD-WAN</div>
+                  <div class="card-desc">Edge per site. Fortinet / Cisco Meraki.</div>
+                </div>
+              </div>
+              <div class="card cursor-pointer transition hover:shadow-md hover:border-brand-orange/40" data-nav="adc">
+                <div class="card-header">
+                  <div class="flex h-10 w-10 items-center justify-center rounded-md bg-secondary"><i data-lucide="scale" class="h-5 w-5"></i></div>
+                  <div class="card-title pt-2">Load balancer</div>
+                  <div class="card-desc">ADC by throughput. F5 / Citrix NetScaler.</div>
+                </div>
+              </div>
+              <div class="card cursor-pointer transition hover:shadow-md hover:border-brand-orange/40" data-nav="server">
+                <div class="card-header">
+                  <div class="flex h-10 w-10 items-center justify-center rounded-md bg-secondary"><i data-lucide="cpu" class="h-5 w-5"></i></div>
+                  <div class="card-title pt-2">Standalone Server</div>
+                  <div class="card-desc">Rack servers. Dell PowerEdge / HPE ProLiant.</div>
+                </div>
+              </div>
+              <div class="card cursor-pointer transition hover:shadow-md hover:border-brand-orange/40" data-nav="ups">
+                <div class="card-header">
+                  <div class="flex h-10 w-10 items-center justify-center rounded-md bg-secondary"><i data-lucide="battery-charging" class="h-5 w-5"></i></div>
+                  <div class="card-title pt-2">UPS / Power</div>
+                  <div class="card-desc">Sized by kVA + runtime. APC / Vertiv.</div>
+                </div>
+              </div>
+            </div>
+
+            <h2 class="mt-8 text-lg font-semibold tracking-tight">Software</h2>
+            <p class="mt-1 text-sm text-muted-foreground">Licensed per endpoint / user / GB — add to any opportunity.</p>
+            <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div class="card cursor-pointer transition hover:shadow-md hover:border-brand-orange/40" data-nav="backup">
+                <div class="card-header">
+                  <div class="flex h-10 w-10 items-center justify-center rounded-md bg-secondary"><i data-lucide="database-backup" class="h-5 w-5"></i></div>
+                  <div class="card-title pt-2">Backup &amp; DR</div>
+                  <div class="card-desc">Software license per instance. Veeam / Commvault.</div>
+                </div>
+              </div>
+              <div class="card cursor-pointer transition hover:shadow-md hover:border-brand-orange/40" data-nav="m365">
+                <div class="card-header">
+                  <div class="flex h-10 w-10 items-center justify-center rounded-md bg-secondary"><i data-lucide="briefcase" class="h-5 w-5"></i></div>
+                  <div class="card-title pt-2">Microsoft 365</div>
+                  <div class="card-desc">Per user / yr. Business Standard / Premium / E3.</div>
+                </div>
+              </div>
+              <div class="card cursor-pointer transition hover:shadow-md hover:border-brand-orange/40" data-nav="ws">
+                <div class="card-header">
+                  <div class="flex h-10 w-10 items-center justify-center rounded-md bg-secondary"><i data-lucide="server-cog" class="h-5 w-5"></i></div>
+                  <div class="card-title pt-2">Windows Server</div>
+                  <div class="card-desc">2025 core-based + CALs. Standard / Datacenter.</div>
+                </div>
+              </div>
+              <div class="card cursor-pointer transition hover:shadow-md hover:border-brand-orange/40" data-nav="virt">
+                <div class="card-header">
+                  <div class="flex h-10 w-10 items-center justify-center rounded-md bg-secondary"><i data-lucide="layers" class="h-5 w-5"></i></div>
+                  <div class="card-title pt-2">Virtualization</div>
+                  <div class="card-desc">Per core / socket. VMware / Nutanix / Proxmox.</div>
+                </div>
+              </div>
+              <div class="card cursor-pointer transition hover:shadow-md hover:border-brand-orange/40" data-nav="endpoint">
+                <div class="card-header">
+                  <div class="flex h-10 w-10 items-center justify-center rounded-md bg-secondary"><i data-lucide="shield-check" class="h-5 w-5"></i></div>
+                  <div class="card-title pt-2">Endpoint Security</div>
+                  <div class="card-desc">EPP / EDR / XDR per endpoint. CrowdStrike / Trend.</div>
+                </div>
+              </div>
+              <div class="card cursor-pointer transition hover:shadow-md hover:border-brand-orange/40" data-nav="nac">
+                <div class="card-header">
+                  <div class="flex h-10 w-10 items-center justify-center rounded-md bg-secondary"><i data-lucide="fingerprint" class="h-5 w-5"></i></div>
+                  <div class="card-title pt-2">NAC</div>
+                  <div class="card-desc">Access control per endpoint. Cisco ISE / Aruba ClearPass.</div>
+                </div>
+              </div>
+              <div class="card cursor-pointer transition hover:shadow-md hover:border-brand-orange/40" data-nav="dlp">
+                <div class="card-header">
+                  <div class="flex h-10 w-10 items-center justify-center rounded-md bg-secondary"><i data-lucide="file-lock-2" class="h-5 w-5"></i></div>
+                  <div class="card-title pt-2">DLP</div>
+                  <div class="card-desc">Data loss prevention per user. Forcepoint / Trellix.</div>
+                </div>
+              </div>
+              <div class="card cursor-pointer transition hover:shadow-md hover:border-brand-orange/40" data-nav="esec">
+                <div class="card-header">
+                  <div class="flex h-10 w-10 items-center justify-center rounded-md bg-secondary"><i data-lucide="mail-check" class="h-5 w-5"></i></div>
+                  <div class="card-title pt-2">Email &amp; SASE</div>
+                  <div class="card-desc">Per user. Mimecast / Proofpoint · Zscaler / Netskope.</div>
+                </div>
+              </div>
+              <div class="card cursor-pointer transition hover:shadow-md hover:border-brand-orange/40" data-nav="captive">
+                <div class="card-header">
+                  <div class="flex h-10 w-10 items-center justify-center rounded-md bg-secondary"><i data-lucide="log-in" class="h-5 w-5"></i></div>
+                  <div class="card-title pt-2">Captive portal</div>
+                  <div class="card-desc">Guest access per site. Aruba ClearPass / Cisco ISE.</div>
+                </div>
+              </div>
+              <div class="card cursor-pointer transition hover:shadow-md hover:border-brand-orange/40" data-nav="siem">
+                <div class="card-header">
+                  <div class="flex h-10 w-10 items-center justify-center rounded-md bg-secondary"><i data-lucide="scroll-text" class="h-5 w-5"></i></div>
+                  <div class="card-title pt-2">Logging / SIEM</div>
+                  <div class="card-desc">Per GB/day ingest. Splunk / Microsoft Sentinel.</div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- ---- View: Firewall Replacement (Phase 2 flow) ---- -->

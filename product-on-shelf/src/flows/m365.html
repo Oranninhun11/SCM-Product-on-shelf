@@ -1,0 +1,108 @@
+  <!-- ===================== Microsoft 365 flow ===================== -->
+  <script>
+    /**
+     * Microsoft 365. MOCK DATA + MOCK PRICING. Single vendor, so the comparison cards are the
+     * plan tiers (Business Standard / Premium / E3); price = per user/yr × users × term, plus a
+     * one-time onboarding (skipped on renewal). priceOption() is the single seam. Recommended is
+     * a fixed default (Business Premium) — not the cheapest.
+     */
+    (function () {
+      // per user per year, THB (mock). Plans are the comparison cards.
+      // --- Pricing source: window.PRICING (Sheet) when present, else mock fallback. ---
+      var P  = window.PRICING || {};
+      var PX = P.m365 || {};
+
+      var PLANS = PX.plans || [
+        { key: 'standard', name: 'Microsoft 365 Business Standard', note: 'Office apps + Teams + Exchange',      perUserYr: 5600 },
+        { key: 'premium',  name: 'Microsoft 365 Business Premium',  note: '+ Intune + Defender + Entra ID P1',   perUserYr: 9800 },
+        { key: 'e3',       name: 'Microsoft 365 E3',                note: 'Enterprise apps + compliance + DLP',  perUserYr: 15600 }
+      ];
+      var RECOMMENDED = 'premium';
+      var ICON        = 'briefcase';
+      var IMPL_BASE   = (P.implementation && P.implementation.m365) || { basic: 40000, standard: 90000, complex: 180000 };  // one-time onboarding
+      var LOC_MULT    = (P.multipliers && P.multipliers.location)   || { bkk: 1.0, upcountry: 1.18 };
+      var BUFFER      = (P.knobs && P.knobs.buffer != null)         ? P.knobs.buffer : 1.20;
+
+      var thb     = function (n) { return '฿' + Math.round(n).toLocaleString('en-US'); };
+      var round1k = function (n) { return Math.round(n / 1000) * 1000; };
+      var el      = function (id) { return document.getElementById(id); };
+
+      function priceOption(p, inp) {
+        var subscription = p.perUserYr * inp.users * inp.years;
+        var impl = (inp.deploy === 'renewal') ? 0 : IMPL_BASE[inp.sow] * LOC_MULT[inp.location];
+        return { subscription: subscription, impl: impl, total: round1k((subscription + impl) * BUFFER) };
+      }
+
+      function readInputs() {
+        return {
+          users:    Math.max(1, parseInt(el('m365-users').value, 10) || 1),
+          deploy:   el('m365-deploy').value,
+          years:    parseInt(el('m365-years').value, 10),
+          sow:      el('m365-sow').value,
+          location: el('m365-location').value
+        };
+      }
+
+      function row(label, value) {
+        return '<div class="flex justify-between"><span class="text-muted-foreground">' + label +
+               '</span><span class="tabular-nums">' + value + '</span></div>';
+      }
+
+      function cardHtml(p, r, inp, recommended) {
+        return '' +
+          '<div class="card flex flex-col' + (recommended ? ' ring-2 ring-brand-orange' : '') + '" data-vendor="' + p.key + '">' +
+            '<div class="card-header">' +
+              '<div class="flex items-start justify-between gap-2">' +
+                '<div class="flex items-center gap-2">' +
+                  '<i data-lucide="' + ICON + '" class="h-4 w-4 text-brand-navy"></i>' +
+                  '<div class="card-title">' + p.name + '</div>' +
+                '</div>' +
+                (recommended ? '<span class="badge badge-brand">Recommended</span>' : '') +
+              '</div>' +
+              '<div class="card-desc pt-0.5">' + p.note + '</div>' +
+              '<div class="flex items-center gap-2 pt-1">' +
+                '<span class="badge badge-secondary">' + inp.users + ' users</span>' +
+                '<span class="text-xs text-muted-foreground">' + (inp.deploy === 'renewal' ? 'renewal' : 'new') + ' · ' + inp.years + ' yr</span>' +
+              '</div>' +
+            '</div>' +
+            '<div class="card-content flex-1 space-y-1.5 text-sm">' +
+              row('Subscription · ' + inp.users + ' users · ' + inp.years + ' yr', thb(r.subscription)) +
+              row('Onboarding', inp.deploy === 'renewal' ? '— (renewal)' : thb(r.impl)) +
+            '</div>' +
+            '<div class="mt-auto flex flex-col gap-3 border-t border-border p-6 pt-4">' +
+              '<div class="flex items-baseline justify-between">' +
+                '<span class="text-sm text-muted-foreground">Est. total</span>' +
+                '<span class="text-xl font-semibold text-brand-navy tabular-nums">' + thb(r.total) + '</span>' +
+              '</div>' +
+              '<button class="btn btn-primary w-full" data-select="' + p.key + '">Add to estimate</button>' +
+            '</div>' +
+          '</div>';
+      }
+
+      function render() {
+        var inp = readInputs();
+        el('m365-sizing').innerHTML =
+          '<div class="rounded-md border border-border bg-card px-4 py-2.5 text-sm">' +
+            '<span class="font-medium tabular-nums">' + inp.users + ' users</span>' +
+            '<span class="text-muted-foreground"> · ' + (inp.deploy === 'renewal' ? 'Renewal' : 'New') + ' · ' + inp.years + ' yr</span>' +
+          '</div>';
+        el('m365-options').innerHTML = PLANS.map(function (p) {
+          return cardHtml(p, priceOption(p, inp), inp, p.key === RECOMMENDED);
+        }).join('');
+        lucide.createIcons();
+      }
+
+      function init() {
+        document.querySelectorAll('#m365-users, #m365-deploy, #m365-years, #m365-sow, #m365-location')
+          .forEach(function (n) { n.addEventListener('input', render); });
+        el('m365-options').addEventListener('click', function (e) {
+          var btn = e.target.closest('[data-select]'); if (!btn) return;
+          el('m365-options').querySelectorAll('[data-vendor]').forEach(function (c) { c.classList.remove('ring-2', 'ring-brand-navy'); });
+          var card = btn.closest('[data-vendor]'); card.classList.remove('ring-brand-orange'); card.classList.add('ring-2', 'ring-brand-navy');
+        });
+        render();
+      }
+      init();
+    })();
+  </script>
+

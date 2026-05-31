@@ -1,0 +1,126 @@
+  <!-- ===================== Virtualization licensing flow ===================== -->
+  <script>
+    /**
+     * Virtualization licensing. MOCK DATA + MOCK PRICING. Three-way comparison: VMware and
+     * Nutanix are per-core (VMware enforces a 16-core/socket subscription minimum); Proxmox is
+     * per-socket (its cost advantage at high core counts). Renewal drops implementation.
+     * priceOption() is the single seam.
+     */
+    (function () {
+      // --- Pricing source: window.PRICING (Sheet) when present, else mock fallback. ---
+      var P  = window.PRICING || {};
+      var PX = P.virt || {};
+
+      var PER_CORE = PX.per_core || {
+        vmware:  { standard: 3000, advanced: 5000, full: 9000 },
+        nutanix: { standard: 2500, advanced: 4200, full: 6500 }
+      };
+      var PER_SOCKET = PX.per_socket || { proxmox: { standard: 3500, advanced: 9000, full: 35000 } };
+      var EDITION = {
+        vmware:  { standard: 'vSphere Standard', advanced: 'vSphere Foundation (VVF)', full: 'Cloud Foundation (VCF)' },
+        nutanix: { standard: 'NCI Starter',      advanced: 'NCI Pro',                  full: 'NCI Ultimate' },
+        proxmox: { standard: 'Community',         advanced: 'Basic',                    full: 'Premium' }
+      };
+      var META = {
+        vmware:  { name: 'VMware',     icon: 'layers' },
+        nutanix: { name: 'Nutanix',    icon: 'layers' },
+        proxmox: { name: 'Proxmox VE', icon: 'layers' }
+      };
+      var TIER_LABEL = { standard: 'Standard', advanced: 'Advanced', full: 'Full-stack' };
+      var VMWARE_MIN_CORES = 16;  // per-socket subscription minimum
+      var IMPL_BASE = (P.implementation && P.implementation.virt) || { basic: 60000, standard: 150000, complex: 320000 };
+      var LOC_MULT  = (P.multipliers && P.multipliers.location)   || { bkk: 1.0, upcountry: 1.18 };
+      var BUFFER    = (P.knobs && P.knobs.buffer != null)         ? P.knobs.buffer : 1.20;
+
+      var thb = function (n) { return '฿' + Math.round(n).toLocaleString('en-US'); };
+      var round1k = function (n) { return Math.round(n / 1000) * 1000; };
+      var el = function (id) { return document.getElementById(id); };
+
+      function priceOption(family, inp) {
+        var license, unitLabel;
+        if (family === 'proxmox') {
+          license = PER_SOCKET.proxmox[inp.tier] * inp.sockets * inp.years;
+          unitLabel = inp.sockets + ' socket' + (inp.sockets > 1 ? 's' : '');
+        } else {
+          var cps = (family === 'vmware') ? Math.max(inp.cores, VMWARE_MIN_CORES) : inp.cores;
+          var totalCores = inp.sockets * cps;
+          license = PER_CORE[family][inp.tier] * totalCores * inp.years;
+          unitLabel = totalCores + ' cores';
+        }
+        var impl = (inp.deploy === 'renewal') ? 0 : IMPL_BASE[inp.sow] * LOC_MULT[inp.location];
+        return { edition: EDITION[family][inp.tier], license: license, impl: impl, unitLabel: unitLabel,
+                 total: round1k((license + impl) * BUFFER) };
+      }
+
+      function readInputs() {
+        return {
+          sockets:  Math.max(1, parseInt(el('virt-sockets').value, 10) || 1),
+          cores:    parseInt(el('virt-cores').value, 10),
+          tier:     el('virt-tier').value,
+          deploy:   el('virt-deploy').value,
+          years:    parseInt(el('virt-years').value, 10),
+          sow:      el('virt-sow').value,
+          location: el('virt-location').value
+        };
+      }
+
+      function row(label, value) {
+        return '<div class="flex justify-between"><span class="text-muted-foreground">' + label +
+               '</span><span class="tabular-nums">' + value + '</span></div>';
+      }
+
+      function cardHtml(family, r, inp, recommended) {
+        return '' +
+          '<div class="card flex flex-col' + (recommended ? ' ring-2 ring-brand-orange' : '') + '" data-vendor="' + family + '">' +
+            '<div class="card-header">' +
+              '<div class="flex items-start justify-between gap-2">' +
+                '<div class="flex items-center gap-2">' +
+                  '<i data-lucide="' + META[family].icon + '" class="h-4 w-4 text-brand-navy"></i>' +
+                  '<div class="card-title">' + META[family].name + '</div>' +
+                '</div>' +
+                (recommended ? '<span class="badge badge-brand">Best value</span>' : '') +
+              '</div>' +
+              '<div class="card-desc pt-0.5">' + r.edition + '</div>' +
+              '<div class="flex items-center gap-2 pt-1">' +
+                '<span class="badge badge-secondary">' + TIER_LABEL[inp.tier] + '</span>' +
+                '<span class="text-xs text-muted-foreground">' + r.unitLabel + ' · ' + (inp.deploy === 'renewal' ? 'renewal' : 'new') + '</span>' +
+              '</div>' +
+            '</div>' +
+            '<div class="card-content flex-1 space-y-1.5 text-sm">' +
+              row('License · ' + r.unitLabel + ' · ' + inp.years + ' yr', thb(r.license)) +
+              row('Implementation', inp.deploy === 'renewal' ? '— (renewal)' : thb(r.impl)) +
+            '</div>' +
+            '<div class="mt-auto flex flex-col gap-3 border-t border-border p-6 pt-4">' +
+              '<div class="flex items-baseline justify-between">' +
+                '<span class="text-sm text-muted-foreground">Est. total</span>' +
+                '<span class="text-xl font-semibold text-brand-navy tabular-nums">' + thb(r.total) + '</span>' +
+              '</div>' +
+              '<button class="btn btn-primary w-full" data-select="' + family + '">Add to estimate</button>' +
+            '</div>' +
+          '</div>';
+      }
+
+      function render() {
+        var inp = readInputs();
+        el('virt-sizing').innerHTML =
+          '<div class="rounded-md border border-border bg-card px-4 py-2.5 text-sm">' +
+            '<span class="font-medium tabular-nums">' + inp.sockets + ' sockets × ' + inp.cores + ' cores</span>' +
+            '<span class="text-muted-foreground"> = ' + (inp.sockets * inp.cores) + ' cores · ' +
+              TIER_LABEL[inp.tier] + ' · ' + (inp.deploy === 'renewal' ? 'Renewal' : 'New') + ' · ' + inp.years + ' yr</span>' +
+          '</div>';
+        var families = ['vmware', 'nutanix', 'proxmox'];
+        var results = families.map(function (f) { return { f: f, r: priceOption(f, inp) }; });
+        var cheapest = results.reduce(function (a, b) { return b.r.total < a.r.total ? b : a; });
+        el('virt-options').innerHTML = results.map(function (x) { return cardHtml(x.f, x.r, inp, x === cheapest); }).join('');
+        lucide.createIcons();
+      }
+
+      function init() {
+        document.querySelectorAll('#virt-sockets, #virt-cores, #virt-tier, #virt-deploy, #virt-years, #virt-sow, #virt-location')
+          .forEach(function (n) { n.addEventListener('input', render); });
+        render();
+      }
+      init();
+    })();
+  </script>
+

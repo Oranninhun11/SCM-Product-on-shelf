@@ -1,0 +1,170 @@
+  <!-- ===================== HCI Refresh flow ===================== -->
+  <script>
+    /**
+     * Phase 3 — HCI Refresh.
+     *
+     * MOCK DATA + MOCK PRICING (same story as the Firewall flow). Sizing applies
+     * the house rules: ×1.20 growth buffer on compute + storage, then N+1, with a
+     * 3-node HCI minimum. priceCluster() is the single seam to rewire in the
+     * integration phase.
+     */
+    (function () {
+      // --- Pricing source: window.PRICING (Sheet) when present, else mock fallback. ---
+      var P  = window.PRICING || {};
+      var PX = P.hci || {};
+
+      var GROWTH    = 1.20;   // capacity headroom on vCPU / RAM / storage
+      var BUFFER    = (P.knobs && P.knobs.buffer != null) ? P.knobs.buffer : 1.20;   // price negotiation buffer on total
+      var MIN_NODES = 3;      // HCI cluster minimum (before N+1)
+      var IMPL_BASE = (P.implementation && P.implementation.hci) || { basic: 150000, standard: 350000, complex: 700000 }; // per project
+      var SLA_MULT  = (P.multipliers && P.multipliers.sla)       || { nbd: 1.0, '8x5x4': 1.25, '24x7x4': 1.6 };
+      var LOC_MULT  = (P.multipliers && P.multipliers.location)  || { bkk: 1.0, upcountry: 1.18 };
+      var SLA_LABEL = { nbd: 'NBD', '8x5x4': '8×5×4', '24x7x4': '24×7×4' };
+
+      // Per-node profiles (cores, RAM GB, usable TB after RF; hw + annual sub THB).
+      var VENDORS = PX.vendors || [
+        { key: 'nutanix',    name: 'Nutanix',              model: 'NX-3155-G9',
+          icon: 'server',     cores: 32, ram: 512, usableTB: 15, hwPerNode: 1150000, swPerNodeYr: 220000 },
+        { key: 'supermicro', name: 'Supermicro + Proxmox', model: 'SYS-2125H (Proxmox VE)',
+          icon: 'server-cog', cores: 32, ram: 512, usableTB: 14, hwPerNode: 720000,  swPerNodeYr: 38000 }
+      ];
+
+      var thb     = function (n) { return '฿' + Math.round(n).toLocaleString('en-US'); };
+      var round10k = function (n) { return Math.round(n / 10000) * 10000; };
+      var el      = function (id) { return document.getElementById(id); };
+
+      function readInputs() {
+        return {
+          vcpu:     Math.max(1, parseInt(el('hci-vcpu').value, 10) || 0),
+          ramGB:    Math.max(1, parseInt(el('hci-ram').value, 10) || 0),
+          usableTB: Math.max(1, parseFloat(el('hci-storage').value) || 0),
+          oc:       parseInt(el('hci-overcommit').value, 10),
+          nodes:    Math.max(MIN_NODES, parseInt(el('hci-nodes').value, 10) || MIN_NODES),
+          sow:      el('hci-sow').value,
+          years:    parseInt(el('hci-years').value, 10),
+          sla:      el('hci-sla').value,
+          location: el('hci-location').value
+        };
+      }
+
+      // Workload-driven node count (the larger of what each vendor profile needs), min 3.
+      function autoNodes(inp) {
+        var req = requirement(inp);
+        return Math.max(MIN_NODES, sizeNodes(VENDORS[0], req), sizeNodes(VENDORS[1], req));
+      }
+      // Re-derive the editable node field from the workload, then re-price.
+      function syncAuto() { el('hci-nodes').value = autoNodes(readInputs()); render(); }
+
+      // Buffered requirement → physical cores / RAM / usable TB the cluster must meet.
+      function requirement(inp) {
+        return {
+          cores:    Math.ceil(inp.vcpu * GROWTH / inp.oc),
+          ramGB:    Math.ceil(inp.ramGB * GROWTH),
+          usableTB: Math.ceil(inp.usableTB * GROWTH)
+        };
+      }
+
+      // Smallest node count meeting cores AND RAM AND storage, min 3, then +1 (N+1).
+      function sizeNodes(v, req) {
+        var n = Math.max(
+          Math.ceil(req.cores / v.cores),
+          Math.ceil(req.ramGB / v.ram),
+          Math.ceil(req.usableTB / v.usableTB),
+          MIN_NODES
+        );
+        return n + 1;
+      }
+
+      // The single pricing seam — replace its inputs with real data in the integration phase.
+      function priceCluster(v, nodes, inp) {
+        var hw   = v.hwPerNode * nodes;                                  // one-time
+        var sw   = v.swPerNodeYr * nodes * inp.years * SLA_MULT[inp.sla]; // subscription incl. support
+        var impl = IMPL_BASE[inp.sow] * LOC_MULT[inp.location];          // flat, project-level
+        return { hw: hw, sw: sw, impl: impl, total: round10k((hw + sw + impl) * BUFFER) };
+      }
+
+      function row(label, value) {
+        return '<div class="flex justify-between"><span class="text-muted-foreground">' + label +
+               '</span><span class="tabular-nums">' + value + '</span></div>';
+      }
+
+      function cardHtml(v, nodes, p, inp, recommended) {
+        return '' +
+          '<div class="card flex flex-col' + (recommended ? ' ring-2 ring-brand-orange' : '') + '" data-vendor="' + v.key + '">' +
+            '<div class="card-header">' +
+              '<div class="flex items-start justify-between gap-2">' +
+                '<div class="flex items-center gap-2">' +
+                  '<i data-lucide="' + v.icon + '" class="h-4 w-4 text-brand-navy"></i>' +
+                  '<div class="card-title">' + v.name + '</div>' +
+                '</div>' +
+                (recommended ? '<span class="badge badge-brand">Best value</span>' : '') +
+              '</div>' +
+              '<div class="card-desc pt-0.5">' + v.model + '</div>' +
+              '<div class="flex flex-wrap items-center gap-2 pt-1">' +
+                '<span class="badge badge-secondary">' + nodes + ' nodes</span>' +
+                '<span class="text-xs text-muted-foreground">' + v.cores + 'C · ' + v.ram + 'GB · ' + v.usableTB + 'TB ea</span>' +
+              '</div>' +
+            '</div>' +
+            '<div class="card-content flex-1 space-y-1.5 text-sm">' +
+              row('Hardware (' + nodes + ' nodes)', thb(p.hw)) +
+              row('Software + support · ' + inp.years + ' yr · ' + SLA_LABEL[inp.sla], thb(p.sw)) +
+              row('Implementation', thb(p.impl)) +
+            '</div>' +
+            '<div class="mt-auto flex flex-col gap-3 border-t border-border p-6 pt-4">' +
+              '<div class="flex items-baseline justify-between">' +
+                '<span class="text-sm text-muted-foreground">Est. total</span>' +
+                '<span class="text-xl font-semibold text-brand-navy tabular-nums">' + thb(p.total) + '</span>' +
+              '</div>' +
+              '<button class="btn btn-primary w-full" data-select="' + v.key + '">Add to estimate</button>' +
+            '</div>' +
+          '</div>';
+      }
+
+      function render() {
+        var inp = readInputs();
+        var req = requirement(inp);
+
+        el('hci-sizing').innerHTML =
+          '<div class="rounded-md border border-border bg-muted/40 px-4 py-2.5 text-sm text-muted-foreground">' +
+            '<span class="font-medium text-foreground">Sized for</span> ' +
+            inp.vcpu + ' vCPU · ' + inp.ramGB + ' GB · ' + inp.usableTB + ' TB usable, +20% growth → ' +
+            '<span class="text-foreground">' + req.cores + ' cores</span> @ ' + inp.oc + ':1, ' +
+            req.ramGB + ' GB, ' + req.usableTB + ' TB usable · min N+1' +
+          '</div>';
+
+        var results = VENDORS.map(function (v) {
+          return { v: v, nodes: inp.nodes, p: priceCluster(v, inp.nodes, inp) };
+        });
+        var cheapest = results.reduce(function (a, b) { return b.p.total < a.p.total ? b : a; });
+
+        el('hci-options').innerHTML = results.map(function (x) {
+          return cardHtml(x.v, x.nodes, x.p, inp, x === cheapest);
+        }).join('');
+        lucide.createIcons();
+      }
+
+      function init() {
+        // Workload fields re-derive the node count; node + commercial fields just re-price.
+        document.querySelectorAll('#hci-vcpu, #hci-ram, #hci-storage, #hci-overcommit')
+          .forEach(function (n) { n.addEventListener('input', syncAuto); });
+        document.querySelectorAll('#hci-nodes, #hci-sow, #hci-years, #hci-sla, #hci-location')
+          .forEach(function (n) { n.addEventListener('input', render); });
+
+        el('hci-options').addEventListener('click', function (e) {
+          var btn = e.target.closest('[data-select]');
+          if (!btn) return;
+          el('hci-options').querySelectorAll('[data-vendor]').forEach(function (c) {
+            c.classList.remove('ring-2', 'ring-brand-navy');
+          });
+          var card = btn.closest('[data-vendor]');
+          card.classList.remove('ring-brand-orange');
+          card.classList.add('ring-2', 'ring-brand-navy');
+        });
+
+        syncAuto();
+      }
+
+      init();
+    })();
+  </script>
+

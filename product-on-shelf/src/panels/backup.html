@@ -1,0 +1,59 @@
+          <section data-view="backup" hidden>
+            <div class="flex items-start justify-between gap-4">
+              <div>
+                <div class="mb-1 flex items-center gap-2 text-sm text-muted-foreground">
+                  <span class="cursor-pointer hover:text-foreground" data-nav="home">Start estimate</span>
+                  <i data-lucide="chevron-right" class="h-3.5 w-3.5"></i>
+                  <span class="text-foreground">Backup &amp; DR</span>
+                </div>
+                <h1 class="text-2xl font-semibold tracking-tight">Backup &amp; DR</h1>
+              </div>
+              <span class="badge badge-secondary shrink-0">Mock pricing</span>
+            </div>
+
+            <div class="mt-5" data-tabs>
+              <div class="tablist">
+                <button class="tab active" data-tab="bk-new">New / Expand</button>
+              </div>
+
+              <!-- Project: New / Expand (Veeam / Commvault) -->
+              <div class="mt-5" data-panel="bk-new">
+
+                <!-- Requirements -->
+                <div class="card mt-6">
+                  <div class="card-header"><div class="card-title">Requirements</div></div>
+                  <div class="card-content grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    <div class="grid gap-1.5">
+                      <label class="label" for="bk-units">Units of lic</label>
+                      <input id="bk-units" type="number" min="1" value="1" class="input" />
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="bk-edition">Edition</label>
+                      <select id="bk-edition" class="select">
+                        <option value="standard" selected>Standard</option>
+                        <option value="enterprise">Enterprise</option>
+                      </select>
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="bk-years">Support term</label>
+                      <select id="bk-years" class="select">
+                        <option value="1">1 year</option>
+                        <option value="3" selected>3 years</option>
+                        <option value="5">5 years</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Results -->
+                <div class="mt-6 flex flex-wrap items-baseline justify-between gap-2">
+                  <h2 class="text-lg font-semibold tracking-tight">Backup &amp; DR options</h2>
+                  <span class="text-xs text-muted-foreground">THB &middot; incl. 20% buffer &middot; software license per instance</span>
+                </div>
+                <div id="bk-sizing" class="mt-2"></div>
+                <div id="bk-options" class="mt-3 grid gap-4 sm:grid-cols-2"></div>
+              </div><!-- /panel bk-new -->
+            </div><!-- /tabs -->
+          </section>
+
+          <!-- ---- View: Wireless (AP/WLC) ---- -->

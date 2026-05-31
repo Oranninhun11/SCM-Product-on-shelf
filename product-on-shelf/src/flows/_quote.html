@@ -1,0 +1,88 @@
+  <!-- ===================== Create quotation (client-side .xlsx export) ===================== -->
+  <script>
+    /**
+     * Builds a customer-facing quotation .xlsx from the current estimate cart, client-side
+     * via SheetJS — works in the browser with no deploy. Mirrors the SCM "Q Project_Option"
+     * sheet shape (letterhead → line items → Subtotal / VAT 7% / Grand total).
+     *
+     * SCOPE: customer quotation only. The internal Cost sheet (cost + supplier + GP) needs the
+     * pricing DB and is generated later via Apps Script + Drive. One cart line = one quotation
+     * row (Qty 1, Unit Price = line total — each line is a pre-configured bundle).
+     *
+     * buildAOA() is exposed on window.PoSQuotation so the mapping/totals stay unit-testable
+     * independently of the download.
+     */
+    (function () {
+      var VAT = 0.07;
+
+      function today() {
+        var d = new Date(), p = function (n) { return (n < 10 ? '0' : '') + n; };
+        return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+      }
+
+      // Cart items -> array-of-arrays for the quotation sheet. Pure: no DOM, no SheetJS.
+      function buildAOA(items, opts) {
+        opts = opts || {};
+        var aoa = [
+          ['SCM B2B Co., Ltd. / บริษัท เอสซีเอ็ม บีทูบี จำกัด'],
+          ['92/54-55 Sathorn Thani Bl.2 FL.19, North Sathorn Rd., Silom, Bangrak, Bangkok 10500'],
+          ['Tel. 0-2116-4213   TAX ID: 0105569003087'],
+          [],
+          ['QUOTATION / ใบเสนอราคา'],
+          ['Date / วันที่', opts.date || today()],
+          ['Quot. No. / เลขที่', opts.quotNo || ''],
+          ['Attn / เรียน', opts.attn || ''],
+          ['Project / โครงการ', opts.project || ''],
+          ['Company / บริษัท', opts.company || ''],
+          [],
+          ['No.', 'Part No.', 'Description', 'QTY', 'Unit Price', 'Total Price']
+        ];
+        var subtotal = 0;
+        items.forEach(function (it, i) {
+          var custom  = it.category === 'Custom';
+          var partNo  = custom ? '' : (it.desc || '');
+          var descr   = custom ? it.title
+                                : (it.category + ' — ' + it.title + (it.desc ? ' ' + it.desc : ''));
+          subtotal += it.total;
+          aoa.push([i + 1, partNo, descr, 1, it.total, it.total]);
+        });
+        var vat = Math.round(subtotal * VAT);
+        aoa.push([]);
+        aoa.push(['', '', '', '', 'ราคารวม / Subtotal', subtotal]);
+        aoa.push(['', '', '', '', 'ภาษีมูลค่าเพิ่ม / VAT 7%', vat]);
+        aoa.push(['', '', '', '', 'รวมทั้งสิ้น / Grand Total', subtotal + vat]);
+        aoa.push([]);
+        aoa.push(['Mock pricing — illustrative; each line already includes its 20% buffer. ' +
+                  'Customer quotation only — internal cost sheet generated separately.']);
+        return aoa;
+      }
+
+      window.PoSQuotation = { buildAOA: buildAOA };
+
+      // Build the workbook (SheetJS) from an AOA and apply widths + THB number format.
+      function toWorkbook(aoa) {
+        var ws = XLSX.utils.aoa_to_sheet(aoa);
+        ws['!cols'] = [{ wch: 5 }, { wch: 18 }, { wch: 48 }, { wch: 6 }, { wch: 14 }, { wch: 14 }];
+        // Currency format on the two price columns (E,F) for every numeric cell.
+        var range = XLSX.utils.decode_range(ws['!ref']);
+        for (var r = range.s.r; r <= range.e.r; r++) {
+          ['E', 'F'].forEach(function (col) {
+            var cell = ws[col + (r + 1)];
+            if (cell && cell.t === 'n') cell.z = '#,##0';
+          });
+        }
+        var wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Quotation');
+        return wb;
+      }
+
+      var quoteBtn = document.getElementById('est-quote');
+      if (quoteBtn) quoteBtn.addEventListener('click', function () {
+        var items = (window.PoSEstimate && window.PoSEstimate.list()) || [];
+        if (!items.length) { alert('Add at least one item to the estimate first.'); return; }
+        var wb = toWorkbook(buildAOA(items, {}));
+        XLSX.writeFile(wb, 'SCM-Quotation-' + today() + '.xlsx');
+      });
+    })();
+  </script>
+

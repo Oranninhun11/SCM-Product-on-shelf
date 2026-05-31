@@ -1,0 +1,40 @@
+          <section data-view="custom" hidden>
+            <div class="flex items-start justify-between gap-4">
+              <div>
+                <div class="mb-1 flex items-center gap-2 text-sm text-muted-foreground">
+                  <span class="cursor-pointer hover:text-foreground" data-nav="home">Start estimate</span>
+                  <i data-lucide="chevron-right" class="h-3.5 w-3.5"></i>
+                  <span class="text-foreground">Custom estimate</span>
+                </div>
+                <h1 class="text-2xl font-semibold tracking-tight">Custom estimate</h1>
+                <p class="mt-1 text-sm text-muted-foreground">Add a selected option from any product to build one combined estimate.</p>
+              </div>
+              <div class="flex shrink-0 items-center gap-2">
+                <button id="est-quote" class="btn btn-primary btn-sm"><i data-lucide="file-spreadsheet" class="h-4 w-4"></i> Create quotation</button>
+                <button id="est-clear" class="btn btn-outline btn-sm"><i data-lucide="trash-2" class="h-4 w-4"></i> Clear all</button>
+              </div>
+            </div>
+
+            <!-- Add a custom line (UPS, rack, cabling, misc license — anything without its own flow) -->
+            <div class="card mt-6">
+              <div class="card-header">
+                <div class="card-title">Add a custom line</div>
+                <div class="card-desc">Anything without its own flow — UPS, rack, cabling, misc license.</div>
+              </div>
+              <form id="cl-form" class="card-content flex flex-col gap-3 sm:flex-row sm:items-end">
+                <div class="grid flex-1 gap-1.5">
+                  <label class="label" for="cl-desc">Description</label>
+                  <input id="cl-desc" class="input" placeholder="e.g. APC Smart-UPS 3000VA ×2" />
+                </div>
+                <div class="grid gap-1.5 sm:w-48">
+                  <label class="label" for="cl-amount">Amount (THB)</label>
+                  <input id="cl-amount" type="number" min="0" class="input" placeholder="0" />
+                </div>
+                <button id="cl-add" type="submit" class="btn btn-primary"><i data-lucide="plus" class="h-4 w-4"></i> Add line</button>
+              </form>
+            </div>
+
+            <div id="est-body" class="mt-6"></div>
+          </section>
+
+          <!-- ---- View: UI Kit gallery ---- -->

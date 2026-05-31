@@ -1,0 +1,59 @@
+  <!-- ============================ App script ============================ -->
+  <script>
+    /**
+     * Minimal client-side router: swap [data-view] sections, sync active nav.
+     * No framework — keeps the bundle empty and Apps-Script-safe.
+     */
+    (function () {
+      var views = document.querySelectorAll('[data-view]');
+      var navItems = document.querySelectorAll('[data-nav]');
+
+      // Fill "coming soon" placeholders for projects not yet built.
+      document.querySelectorAll('[data-soon]').forEach(function (host) {
+        var name = host.getAttribute('data-soon');
+        host.innerHTML =
+          '<div class="card">' +
+            '<div class="card-content flex flex-col items-center gap-3 py-14 text-center">' +
+              '<div class="flex h-12 w-12 items-center justify-center rounded-full bg-secondary">' +
+                '<i data-lucide="construction" class="h-6 w-6 text-muted-foreground"></i></div>' +
+              '<div class="card-title">' + name + ' — coming soon</div>' +
+              '<p class="max-w-sm text-sm text-muted-foreground">' +
+                'The device → project structure is in place; this flow drops in here next.</p>' +
+            '</div>' +
+          '</div>';
+      });
+
+      function show(view) {
+        views.forEach(function (v) { v.hidden = v.getAttribute('data-view') !== view; });
+        navItems.forEach(function (n) {
+          if (n.classList.contains('nav-item')) {
+            n.classList.toggle('active', n.getAttribute('data-nav') === view);
+          }
+        });
+        document.querySelector('main').scrollTop = 0;
+        lucide.createIcons();
+      }
+
+      // Switch the active project tab within a device page.
+      function showTab(tab) {
+        var wrap = tab.closest('[data-tabs]');
+        var key = tab.getAttribute('data-tab');
+        wrap.querySelectorAll('[data-tab]').forEach(function (t) { t.classList.toggle('active', t === tab); });
+        wrap.querySelectorAll('[data-panel]').forEach(function (p) {
+          p.classList.toggle('hidden', p.getAttribute('data-panel') !== key);
+        });
+        lucide.createIcons();
+      }
+
+      // One delegated click handler: project tabs first, then device nav.
+      document.addEventListener('click', function (e) {
+        var tab = e.target.closest('[data-tab]');
+        if (tab) { showTab(tab); return; }
+        var nav = e.target.closest('[data-nav]');
+        if (nav) show(nav.getAttribute('data-nav'));
+      });
+
+      lucide.createIcons();
+    })();
+  </script>
+

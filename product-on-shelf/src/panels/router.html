@@ -1,0 +1,74 @@
+          <section data-view="router" hidden>
+            <div class="flex items-start justify-between gap-4">
+              <div>
+                <div class="mb-1 flex items-center gap-2 text-sm text-muted-foreground">
+                  <span class="cursor-pointer hover:text-foreground" data-nav="home">Start estimate</span>
+                  <i data-lucide="chevron-right" class="h-3.5 w-3.5"></i>
+                  <span class="text-foreground">Router / SD-WAN</span>
+                </div>
+                <h1 class="text-2xl font-semibold tracking-tight">Router / SD-WAN</h1>
+              </div>
+              <span class="badge badge-secondary shrink-0">Mock pricing</span>
+            </div>
+            <div class="mt-5" data-tabs>
+              <div class="tablist"><button class="tab active" data-tab="rtr-new">New / Expand</button></div>
+              <div class="mt-5" data-panel="rtr-new">
+                <div class="card mt-6">
+                  <div class="card-header"><div class="card-title">Requirements</div></div>
+                  <div class="card-content grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    <div class="grid gap-1.5">
+                      <label class="label" for="rtr-sites">Units of devices</label>
+                      <input id="rtr-sites" type="number" min="1" value="3" class="input" />
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="rtr-bw">Bandwidth / site</label>
+                      <select id="rtr-bw" class="select">
+                        <option value="low">≤ 100 Mbps</option>
+                        <option value="mid" selected>≤ 500 Mbps</option>
+                        <option value="high">≤ 1 Gbps</option>
+                      </select>
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="rtr-sow">SOW scope</label>
+                      <select id="rtr-sow" class="select">
+                        <option value="basic">Basic &mdash; deploy + WAN up</option>
+                        <option value="standard" selected>Standard &mdash; overlay + policies</option>
+                        <option value="complex">Complex &mdash; full SD-WAN + security</option>
+                      </select>
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="rtr-years">Support term</label>
+                      <select id="rtr-years" class="select">
+                        <option value="1">1 year</option>
+                        <option value="3" selected>3 years</option>
+                        <option value="5">5 years</option>
+                      </select>
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="rtr-sla">SLA tier</label>
+                      <select id="rtr-sla" class="select">
+                        <option value="nbd" selected>NBD (Next Business Day)</option>
+                        <option value="8x5x4">8&times;5&times;4</option>
+                        <option value="24x7x4">24&times;7&times;4</option>
+                      </select>
+                    </div>
+                    <div class="grid gap-1.5">
+                      <label class="label" for="rtr-location">Location</label>
+                      <select id="rtr-location" class="select">
+                        <option value="bkk" selected>Bangkok / metro</option>
+                        <option value="upcountry">Upcountry</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+                <div class="mt-6 flex flex-wrap items-baseline justify-between gap-2">
+                  <h2 class="text-lg font-semibold tracking-tight">SD-WAN options</h2>
+                  <span class="text-xs text-muted-foreground">THB &middot; incl. 20% buffer &middot; edge &times; devices</span>
+                </div>
+                <div id="rtr-sizing" class="mt-2"></div>
+                <div id="rtr-options" class="mt-3 grid gap-4 sm:grid-cols-2"></div>
+              </div>
+            </div>
+          </section>
+
+          <!-- ---- View: Load balancer / ADC ---- -->

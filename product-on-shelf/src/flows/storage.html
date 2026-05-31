@@ -1,0 +1,171 @@
+  <!-- ===================== Storage Refresh flow ===================== -->
+  <script>
+    /**
+     * Storage — Refresh project.
+     *
+     * MOCK DATA + MOCK PRICING (same pattern as Switch). Sizes a single dual-controller
+     * array to the required usable TB ×1.2 growth buffer, picks the equivalent Dell /
+     * NetApp model, and applies a media factor per performance tier. Implementation +
+     * support are flat (per the house preference); HA is inherent to the array, so there
+     * is no per-unit quantity. priceOption() is the single seam to rewire in integration.
+     */
+    (function () {
+      // --- Pricing source: window.PRICING (Sheet) when present, else mock fallback. ---
+      var P  = window.PRICING || {};
+      var PX = P.storage || {};
+
+      var EXISTING = PX.existing || [
+        { id: 'unity380',   label: 'Dell EMC Unity 380',      tb: 30,  type: 'hybrid' },
+        { id: 'fas2720',    label: 'NetApp FAS2720',          tb: 35,  type: 'hybrid' },
+        { id: 'msa2060',    label: 'HPE MSA 2060',            tb: 25,  type: 'hybrid' },
+        { id: 'me4024',     label: 'Dell PowerVault ME4024',  tb: 40,  type: 'block'  },
+        { id: 'fax20',      label: 'Pure FlashArray //X20',   tb: 22,  type: 'all-flash' }
+      ];
+
+      // tb = usable capacity point (TB); hw = array hardware, lic = annual support+SW (THB)
+      var CATALOG = PX.catalog || {
+        dell: [
+          { model: 'PowerStore 500T',  tb: 40,  hw: 850000,  lic: 60000 },
+          { model: 'PowerStore 1200T', tb: 90,  hw: 1500000, lic: 95000 },
+          { model: 'PowerStore 3200T', tb: 180, hw: 2600000, lic: 150000 }
+        ],
+        netapp: [
+          { model: 'AFF A250', tb: 35,  hw: 780000,  lic: 70000 },
+          { model: 'AFF A400', tb: 95,  hw: 1650000, lic: 110000 },
+          { model: 'AFF A800', tb: 185, hw: 2900000, lic: 175000 }
+        ]
+      };
+
+      var META = {
+        dell:   { name: 'Dell PowerStore', icon: 'hard-drive' },
+        netapp: { name: 'NetApp AFF',      icon: 'database' }
+      };
+
+      var TIER_FACTOR = PX.tier_factor || { capacity: 0.80, general: 1.0, performance: 1.25 };
+      var TIER_MEDIA  = { capacity: 'Hybrid NL-SAS', general: 'Hybrid + flash cache', performance: 'All-flash NVMe' };
+      var IMPL_BASE   = (P.implementation && P.implementation.storage) || { basic: 60000, standard: 120000, complex: 240000 };
+      var SLA_MULT    = (P.multipliers && P.multipliers.sla)           || { nbd: 1.0, '8x5x4': 1.25, '24x7x4': 1.6 };
+      var LOC_MULT    = (P.multipliers && P.multipliers.location)      || { bkk: 1.0, upcountry: 1.18 };
+      var SLA_LABEL   = { nbd: 'NBD', '8x5x4': '8×5×4', '24x7x4': '24×7×4' };
+      var GROWTH      = 1.20;  // capacity growth buffer on required usable TB
+      var BUFFER      = (P.knobs && P.knobs.buffer != null)           ? P.knobs.buffer : 1.20;  // price margin
+
+      var thb     = function (n) { return '฿' + Math.round(n).toLocaleString('en-US'); };
+      var round1k = function (n) { return Math.round(n / 1000) * 1000; };
+      var el      = function (id) { return document.getElementById(id); };
+
+      function pickModel(family, reqTb) {
+        var list = CATALOG[family];
+        for (var i = 0; i < list.length; i++) { if (list[i].tb >= reqTb) return list[i]; }
+        return list[list.length - 1];
+      }
+
+      // The single pricing seam — replace its inputs with real data in the integration phase.
+      function priceOption(family, sizedTb, inp) {
+        var m = pickModel(family, sizedTb);
+        var device  = m.hw * TIER_FACTOR[inp.tier] * inp.units;       // per array × device count
+        var impl    = IMPL_BASE[inp.sow] * LOC_MULT[inp.location];    // flat
+        var support = m.lic * inp.years * SLA_MULT[inp.sla] * inp.units;
+        return { model: m, device: device, impl: impl, support: support,
+                 total: round1k((device + impl + support) * BUFFER) };
+      }
+
+      function readInputs() {
+        return {
+          model:    el('st-model').value,
+          reqtb:    Math.max(1, parseFloat(el('st-reqtb').value) || 1),
+          units:    Math.max(1, parseInt(el('st-units').value, 10) || 1),
+          tier:     el('st-tier').value,
+          sow:      el('st-sow').value,
+          years:    parseInt(el('st-years').value, 10),
+          sla:      el('st-sla').value,
+          location: el('st-location').value
+        };
+      }
+
+      function row(label, value) {
+        return '<div class="flex justify-between"><span class="text-muted-foreground">' + label +
+               '</span><span class="tabular-nums">' + value + '</span></div>';
+      }
+
+      function cardHtml(family, r, inp, recommended) {
+        return '' +
+          '<div class="card flex flex-col' + (recommended ? ' ring-2 ring-brand-orange' : '') + '" data-vendor="' + family + '">' +
+            '<div class="card-header">' +
+              '<div class="flex items-start justify-between gap-2">' +
+                '<div class="flex items-center gap-2">' +
+                  '<i data-lucide="' + META[family].icon + '" class="h-4 w-4 text-brand-navy"></i>' +
+                  '<div class="card-title">' + META[family].name + '</div>' +
+                '</div>' +
+                (recommended ? '<span class="badge badge-brand">Best value</span>' : '') +
+              '</div>' +
+              '<div class="card-desc pt-0.5">' + r.model.model + '</div>' +
+              '<div class="flex items-center gap-2 pt-1">' +
+                '<span class="badge badge-secondary">' + r.model.tb + ' TB usable' + (inp.units > 1 ? ' · ×' + inp.units : '') + '</span>' +
+                '<span class="text-xs text-muted-foreground">' + TIER_MEDIA[inp.tier] + '</span>' +
+              '</div>' +
+            '</div>' +
+            '<div class="card-content flex-1 space-y-1.5 text-sm">' +
+              row('Array' + (inp.units > 1 ? ' ×' + inp.units : '') + ' (' + TIER_MEDIA[inp.tier] + ')', thb(r.device)) +
+              row('Implementation', thb(r.impl)) +
+              row('Support · ' + inp.years + ' yr · ' + SLA_LABEL[inp.sla], thb(r.support)) +
+            '</div>' +
+            '<div class="mt-auto flex flex-col gap-3 border-t border-border p-6 pt-4">' +
+              '<div class="flex items-baseline justify-between">' +
+                '<span class="text-sm text-muted-foreground">Est. total</span>' +
+                '<span class="text-xl font-semibold text-brand-navy tabular-nums">' + thb(r.total) + '</span>' +
+              '</div>' +
+              '<button class="btn btn-primary w-full" data-select="' + family + '">Add to estimate</button>' +
+            '</div>' +
+          '</div>';
+      }
+
+      function render() {
+        var inp = readInputs();
+        var existing = EXISTING.filter(function (e) { return e.id === inp.model; })[0] || EXISTING[0];
+        el('st-detected').textContent = existing.tb + ' TB usable · ' + existing.type;
+
+        var sizedTb = Math.ceil(inp.reqtb * GROWTH);
+        el('st-sizing').innerHTML =
+          '<div class="rounded-md border border-border bg-card px-4 py-2.5 text-sm">' +
+            '<span class="text-muted-foreground">Sized to </span>' +
+            '<span class="font-medium tabular-nums">' + sizedTb + ' TB usable</span>' +
+            '<span class="text-muted-foreground"> (required ' + inp.reqtb + ' TB ×1.2) · ' + TIER_MEDIA[inp.tier] + '</span>' +
+          '</div>';
+
+        var families = ['dell', 'netapp'];
+        var results = families.map(function (f) { return { f: f, r: priceOption(f, sizedTb, inp) }; });
+        var cheapest = results.reduce(function (a, b) { return b.r.total < a.r.total ? b : a; });
+
+        el('st-options').innerHTML = results.map(function (x) {
+          return cardHtml(x.f, x.r, inp, x === cheapest);
+        }).join('');
+        lucide.createIcons();
+      }
+
+      function init() {
+        el('st-model').innerHTML = EXISTING.map(function (e) {
+          return '<option value="' + e.id + '">' + e.label + ' (' + e.tb + ' TB)</option>';
+        }).join('');
+
+        document.querySelectorAll('#st-model, #st-reqtb, #st-units, #st-tier, #st-sow, #st-years, #st-sla, #st-location')
+          .forEach(function (n) { n.addEventListener('input', render); });
+
+        el('st-options').addEventListener('click', function (e) {
+          var btn = e.target.closest('[data-select]');
+          if (!btn) return;
+          el('st-options').querySelectorAll('[data-vendor]').forEach(function (c) {
+            c.classList.remove('ring-2', 'ring-brand-navy');
+          });
+          var card = btn.closest('[data-vendor]');
+          card.classList.remove('ring-brand-orange');
+          card.classList.add('ring-2', 'ring-brand-navy');
+        });
+
+        render();
+      }
+
+      init();
+    })();
+  </script>
+
