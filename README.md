@@ -116,7 +116,7 @@ base64-inlined in `00_head.html` — edit that file surgically.
 - **All pricing mock**.
 
 **Wireless (AP/WLC) flow ✅** *(Hardware)*
-- # APs + Wi-Fi standard + controller/cloud management; APs ×qty + controller (or cloud license) +
+- APs + Wi-Fi standard + controller/cloud management; APs ×qty + controller (or cloud license) +
   per-AP licenses & support (SLA) + impl; Cisco / Aruba. `priceOption()` seam (`wl-*`).
 
 **More hardware flows ✅**
