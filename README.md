@@ -8,6 +8,10 @@ Runs as a **Google Apps Script web app** (HTML Service), because the org is on G
 
 ## Architecture
 
+
+<img width="5072" height="1968" alt="Diagram — Product on Shelf" src="https://github.com/user-attachments/assets/c08a2329-ab96-459b-a0ab-fdfef5d29ff7" />
+
+
 Two product groups in the sidebar: **Hardware** (Firewall, Network Switch, Server / HCI, Storage,
 Wireless AP/WLC) and **Software** (Backup & DR, Endpoint Security, NAC, DLP, Captive portal,
 Logging / SIEM). Each page holds one or more **projects** (e.g. *Replacement*, *New install*,
