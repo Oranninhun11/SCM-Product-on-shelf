@@ -1,4 +1,4 @@
-# Product on Shelf
+# SCM B2B Product on Shelf
 
 Presale / sales **ballpark price list** web app. After requirements come in, presale gets
 an instant marked-up estimate (with negotiation buffer) — so low-probability deals can be
