@@ -59,7 +59,8 @@ var INGEST = {
   // in the window (whole inbox), not just domains/[EXT]/price-subjects. The _alias gate still keeps Price
   // clean — non-price mail simply yields no priced rows. Slower + floods _alias with parts to curate, but
   // misses nothing. Set false to fall back to the price-intent net (domains OR [EXT] OR PRICE_SUBJECT_TERMS).
-  DISCOVER_SCAN_ALL: true,
+  DISCOVER_SCAN_ALL: false,                   // false = price-intent net (domains/[EXT]/price-subjects) — far fewer
+                                              // Gmail reads than whole-inbox; avoids the daily "premium gmail" quota.
   DAILY_WINDOW: '2d',                         // daily overlap window; price_id dedupe makes it idempotent
   BACKFILL_MONTHS: 9,                         // initial one-time (narrow) backfill window
   DISCOVER_MONTHS: 12,                        // discoverAllPriceMail() comprehensive sweep window
@@ -441,7 +442,7 @@ function runIngest_(query, mode, opts) {
   var t0 = Date.now();
   var ss = db_();
   var run = { run_id: 'em-' + nowIso_(), started_at: nowIso_(), src_system: 'email', mode: mode,
-              scanned: 0, upserted: 0, superseded: 0, skipped: 0, status: 'ok', error: '', timedOut: false,
+              scanned: 0, upserted: 0, superseded: 0, skipped: 0, provisional: 0, status: 'ok', error: '', timedOut: false,
               threadsFetched: 0, oldestYmd: '' };
 
   try {
@@ -475,7 +476,16 @@ function runIngest_(query, mode, opts) {
         for (var k = 0; k < items.length; k++) {
           var it = items[k];
           var sku = aliasMap[normPart_(it.part)];
-          if (!sku) { newAliases[normPart_(it.part)] = it.desc; run.skipped++; continue; }
+          if (!sku) {
+            newAliases[normPart_(it.part)] = it.desc;            // still queue blank for curation
+            if (!(it.unit_thb > 0)) { run.skipped++; continue; } // no usable price → nothing to record
+            // "Pull everything": record the price now under a PROVISIONAL key instead of skipping.
+            // Category 'unknown' isn't in POS_CATEGORY_TO_VIEW, so these stay OUT of the app price-list
+            // views (no clutter) but are captured in Price and greppable by the 'unknown:' prefix.
+            // Curate _alias later to promote the part to its real sku_key.
+            sku = 'unknown:unknown:' + normPart_(it.part).toLowerCase().replace(/[:#|]/g, '-');
+            run.provisional++;
+          }
           var ptype = classifyPriceType_(it.part, it.desc);
           reconcile_(sku, ptype, it, ctx, priceState, toAppend, supersedeRowIdx, run);
         }
@@ -484,9 +494,9 @@ function runIngest_(query, mode, opts) {
 
     if (INGEST.DRY_RUN) {
       run.status = 'dry_run';
-      Logger.log('[DRY_RUN] would upsert ' + toAppend.length + ', supersede ' +
-        Object.keys(supersedeRowIdx).length + ', new aliases ' + Object.keys(newAliases).length +
-        ', skipped ' + run.skipped);
+      Logger.log('[DRY_RUN] would upsert ' + toAppend.length + ' (provisional ' + run.provisional +
+        '), supersede ' + Object.keys(supersedeRowIdx).length + ', new aliases ' +
+        Object.keys(newAliases).length + ', skipped ' + run.skipped);
       toAppend.slice(0, 20).forEach(function (r) { Logger.log('  + ' + r[0] + '  ' + r[6] + ' THB'); });
       Object.keys(newAliases).forEach(function (p) { Logger.log('  ? unmatched part: ' + p + ' — ' + newAliases[p]); });
     } else {
@@ -495,6 +505,8 @@ function runIngest_(query, mode, opts) {
       appendNewAliases_(ss, newAliases);
       run.superseded = Object.keys(supersedeRowIdx).length;
       run.upserted = toAppend.length;
+      Logger.log('Ingest ' + mode + ': upserted ' + run.upserted + ' (provisional ' + run.provisional +
+        '), superseded ' + run.superseded + ', skipped ' + run.skipped);
       metaSet_(ss, 'email_last_cursor', ymd_(new Date()));
       metaSet_(ss, 'last_full_sync', nowIso_());
     }

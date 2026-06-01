@@ -6,8 +6,9 @@
  * together in load order. We evaluate it as a template so those includes run.
  */
 function doGet() {
-  return HtmlService.createTemplateFromFile('index')
-    .evaluate()
+  var t = HtmlService.createTemplateFromFile('index');
+  t.PRICING_JSON = posPricingJson_();   // injected into the bootstrap <script> (see ReadPath.gs + build.py)
+  return t.evaluate()
     .setTitle('Product on Shelf')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);

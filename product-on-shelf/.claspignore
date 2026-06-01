@@ -6,5 +6,6 @@
 !Code.gs
 !Setup.gs
 !Ingest_Email.gs
+!ReadPath.gs
 !index.html
 !src/**/*.html
