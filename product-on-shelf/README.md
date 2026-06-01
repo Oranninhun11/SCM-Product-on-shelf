@@ -32,6 +32,12 @@ python3 build.py            # regenerate index.html (include manifest) from src/
 python3 build.py && npx @google/clasp push   # then deploy: npx @google/clasp deploy --deploymentId <id>
 ```
 
+**Editing an existing partial only needs a push** (`tools/push.sh`, or `clasp push`): the partial
+is pushed as its own file and inlined live, so the change shows on the `/dev` (`@HEAD`) URL after a
+hard-refresh — no `clasp deploy`. `build.py` is only *required* when you **add / remove / reorder**
+a partial (the MANIFEST changes). The source of truth is `src/`; `preview.html` is local-only and is
+never pushed — editing it does nothing to the served app.
+
 `src/` is split by concern, included in load-order by the MANIFEST in `build.py`:
 - `00_head.html`, `01_shell_top.html`, `02_shell_bottom.html`, `99_foot.html` — head/style + app shell.
 - `src/panels/<view>.html` — one `<section data-view="…">` markup panel per screen.

@@ -55,11 +55,17 @@ var INGEST = {
     'quotation', 'quote', 'pricelist', 'price', 'pricing',  // EN
     'RFQ', 'request price'                                   // EN intent
   ],
+  // WIDEST net: when true, discoverAllPriceMail() drops the source filter entirely and reads EVERY mail
+  // in the window (whole inbox), not just domains/[EXT]/price-subjects. The _alias gate still keeps Price
+  // clean — non-price mail simply yields no priced rows. Slower + floods _alias with parts to curate, but
+  // misses nothing. Set false to fall back to the price-intent net (domains OR [EXT] OR PRICE_SUBJECT_TERMS).
+  DISCOVER_SCAN_ALL: true,
   DAILY_WINDOW: '2d',                         // daily overlap window; price_id dedupe makes it idempotent
   BACKFILL_MONTHS: 9,                         // initial one-time (narrow) backfill window
   DISCOVER_MONTHS: 12,                        // discoverAllPriceMail() comprehensive sweep window
   MAX_THREADS: 250,                           // cap per run for daily/backfill (Gmail/exec-time safety)
   DISCOVER_THREADS: 400,                      // cap per discovery run (≤500 Gmail max; cursor walks older across runs)
+  DISCOVER_RESUME_AFTER_MS: 60 * 1000,        // gap between auto-resume discovery batches (startDiscovery)
   TIME_BUDGET_MS: 4.5 * 60 * 1000,            // stop before the 6-min execution limit
   CHAT_WEBHOOK_URL: '',                       // paste the Google Chat incoming webhook; '' = skip notify
   TZ: 'Asia/Bangkok'
@@ -174,8 +180,17 @@ function discoverAllPriceMail() {
   var cursor = metaGet_(ss, 'email_discover_before');          // 'yyyy/MM/dd' boundary set by a prior partial run
   if (cursor) win += ' before:' + cursor;
 
+  // SCAN_ALL drops the source filter — sweep the whole inbox in the window. Otherwise use the price-intent
+  // net (domains OR [EXT] OR price subjects). Either way the broad message gate parses every inbound mail.
+  var query = INGEST.DISCOVER_SCAN_ALL ? win : buildQuery_(win, true);
   var cap = INGEST.DISCOVER_THREADS;
-  var res = runIngest_(buildQuery_(win, true), 'discover', { broadGate: true, cap: cap });
+  var res = runIngest_(query, 'discover', { broadGate: true, cap: cap });
+
+  // On error, write nothing and DON'T advance the cursor — the same batch must retry, not be skipped.
+  if (res.status === 'error') {
+    Logger.log('Discovery ERROR — cursor left unchanged so the same batch retries on re-run.\n' + res.error);
+    return res;
+  }
 
   // More history remains if the page filled to the cap or we ran out of time. Advance the cursor to
   // (oldest fetched day + 1) so the next run re-includes that boundary day (dedupe-safe) and continues
@@ -201,6 +216,70 @@ function resetDiscover() {
   metaSet_(ss, 'email_discover_done', 'FALSE');
   metaSet_(ss, 'email_discover_before', '');
   Logger.log('Discovery gate cleared — discoverAllPriceMail() will sweep from the newest again.');
+}
+
+/**
+ * Run discovery to completion without manual re-runs. discoverAllPriceMail() fetches at most
+ * DISCOVER_THREADS (400) threads per run and reports PARTIAL while older history remains; this
+ * runs one batch now, then chains the next on a self-deleting time trigger DISCOVER_RESUME_AFTER_MS
+ * later, until the sweep is COMPLETE. Call once from the editor. Use stopDiscovery() to cancel.
+ */
+function startDiscovery() {
+  deleteDiscoverTriggers_();          // start clean — no leftover chain from a previous run
+  _discoverTick_();                   // first batch now; reschedules itself if more remains
+}
+
+/** Trigger handler: run one discovery batch, then reschedule unless done / errored / dry-run. */
+function _discoverTick_() {
+  deleteDiscoverTriggers_();          // at most one pending tick — delete before (re)scheduling
+  var res = discoverAllPriceMail();
+  if (metaGet_(db_(), 'email_discover_done') === 'TRUE') {
+    Logger.log('Auto-resume: discovery COMPLETE — chain stopped.');
+    return;
+  }
+  if (res && res.status === 'error') {
+    Logger.log('Auto-resume: STOPPED on error (cursor unchanged). Fix, then re-run startDiscovery().');
+    return;
+  }
+  if (INGEST.DRY_RUN) {               // DRY_RUN never sets the done flag — would loop forever
+    Logger.log('Auto-resume: DRY_RUN — not rescheduling. Set INGEST.DRY_RUN=false to sweep for real.');
+    return;
+  }
+  ScriptApp.newTrigger('_discoverTick_').timeBased().after(INGEST.DISCOVER_RESUME_AFTER_MS).create();
+  Logger.log('Auto-resume: next batch in ' + (INGEST.DISCOVER_RESUME_AFTER_MS / 1000) + 's.');
+}
+
+/** Cancel the auto-resume chain (any pending _discoverTick_ triggers). */
+function stopDiscovery() {
+  Logger.log('Auto-resume: cleared ' + deleteDiscoverTriggers_() + ' pending discovery trigger(s).');
+}
+
+/** Delete every pending _discoverTick_ trigger; returns the count removed. */
+function deleteDiscoverTriggers_() {
+  var n = 0;
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === '_discoverTick_') { ScriptApp.deleteTrigger(t); n++; }
+  });
+  return n;
+}
+
+/**
+ * DESTRUCTIVE recovery: wipe all Price DATA rows (header kept) and clear every ingest gate + cursor,
+ * so the next seedAliases() + discoverAllPriceMail() rebuilds Price from email cleanly. Use this to
+ * recover from a bad partial run (e.g. rows stranded superseded=TRUE with no active replacement).
+ * Safe: prices are fully re-derivable from the source mail, and nothing reads Price yet. Leaves the
+ * curated `_alias` mappings untouched.
+ */
+function resetPriceData() {
+  var ss = db_();
+  var sh = ss.getSheetByName('Price');
+  var last = sh.getLastRow(), cleared = Math.max(0, last - 1);
+  if (last > 1) sh.getRange(2, 1, last - 1, sh.getLastColumn()).clearContent();
+  ['email_backfill_done', 'email_discover_done'].forEach(function (k) { metaSet_(ss, k, 'FALSE'); });
+  ['email_discover_before', 'email_last_cursor'].forEach(function (k) { metaSet_(ss, k, ''); });
+  Logger.log('resetPriceData: cleared ' + cleared + ' Price rows + reset all ingest gates/cursors. ' +
+    'Next: seedAliases() (if needed) then discoverAllPriceMail() until COMPLETE.');
+  return cleared;
 }
 
 /**
@@ -290,10 +369,31 @@ var ALIAS_SEED = [
   ['AT-SPLX10A',          'switch:alliedtelesis:at-splx10a',   '1000BaseLX 10km SFP'],
   ['AT-SP10SR',           'switch:alliedtelesis:at-sp10sr',    '10G 850nm short-haul SFP+'],
   ['AT-SPSX',             'switch:alliedtelesis:at-spsx',      '1000BaseSX SFP'],
-  ['AT-QSFP1CU',          'switch:alliedtelesis:at-qsfp1cu',   '40G QSFP+ DAC 1m']
-  // NOTE: Veeam Essentials lines in _alias (V-ESSSTD-*-P024M/P01MR/P0ARE, V-ESSVUL-*-PS1MG) are
-  // maintenance-uplift / renewal / express-migration artifacts, NOT representative catalog prices —
-  // deliberately left UNMAPPED so they don't pollute backup pricing. Curate by hand if ever needed.
+  ['AT-QSFP1CU',          'switch:alliedtelesis:at-qsfp1cu',   '40G QSFP+ DAC 1m'],
+  // --- Allied-Telesis transceiver Net.Cover support (classify net.cover rule -> support_yr) ---
+  ['AT-SP10TW1-NCA1',     'switch:alliedtelesis:at-sp10tw1',   'Net.Cover Advanced 1yr (SP10TW1) -> support_yr'],
+  ['AT-SPLX10A-NCA1',     'switch:alliedtelesis:at-splx10a',   'Net.Cover Advanced 1yr (SPLX10A) -> support_yr'],
+  ['AT-SP10SR-NCA1',      'switch:alliedtelesis:at-sp10sr',    'Net.Cover Advanced 1yr (SP10SR) -> support_yr'],
+  ['AT-SPSX-NCA1',        'switch:alliedtelesis:at-spsx',      'Net.Cover Advanced 1yr (SPSX) -> support_yr'],
+  // --- H3C optical transceivers (switch accessories; HIHSFP = distributor SKU prefix) ---
+  ['HIHSFPSFP-XG-LH40-SM1550',     'switch:h3c:sfp-xg-lh40-sm1550', 'H3C 10GBASE-ER SFP+ 1550nm 40km'],
+  ['HIHSFPQSFP-100G-ER4L-WDM1300', 'switch:h3c:qsfp-100g-er4l',     'H3C 100G QSFP28 ER4L 40km'],
+  ['HIHSFPQSFP-100G-ZR4-WDM1300',  'switch:h3c:qsfp-100g-zr4',      'H3C 100G QSFP28 ZR4 80km'],
+  // --- Microsoft Windows Server 2025 (winsvr flow) ---
+  ['DG7GMGF0PWHC_16CORE_COM', 'winsvr:microsoft:ws2025-std-16core', 'Windows Server 2025 Standard 16-core pack -> lic_yr'],
+  ['DG7GMGF0PWHT_USR_COM',    'winsvr:microsoft:ws2025-user-cal',   'Windows Server 2025 User CAL -> lic_yr'],
+  ['DG7GMGF0PWHT_DVC_COM',    'winsvr:microsoft:ws2025-device-cal', 'Windows Server 2025 Device CAL -> lic_yr'],
+  // --- Microsoft SQL Server 2025 (catalog only — no app flow yet) ---
+  ['DG7GMGF0VNH2_2CORE_COM',  'sqlserver:microsoft:sql2025-std-2core',  'SQL Server 2025 Standard 2-core pack -> lic_yr'],
+  ['DG7GMGF0VNHV_DVC_COM',    'sqlserver:microsoft:sql2025-device-cal', 'SQL Server 2025 Device CAL -> lic_yr'],
+  // --- Quest Toad for Oracle (catalog only — no app flow yet) ---
+  ['DVB-TOD-TK',          'software:quest:toad-oracle-dev',    'Toad for Oracle Developer Edition, per-seat term + maint'],
+  // --- Veeam Data Platform Essentials maintenance / migration. Distinct per-term models so these
+  //     renewal/uplift/migration line items don't collide with or overwrite the base license price. ---
+  ['V-ESSSTD-VS-P0ARE-00','backup:veeam:ess-std-maint-1y',       'Essentials Std annual basic maintenance renewal -> support_yr'],
+  ['V-ESSSTD-VS-P024M-00','backup:veeam:ess-std-maint-uplift',   'Essentials Std 24x7 maintenance uplift, 1 month -> support_yr'],
+  ['V-ESSSTD-VS-P01MR-00','backup:veeam:ess-std-maint-1m',       'Essentials Std monthly basic maintenance renewal -> support_yr'],
+  ['V-ESSVUL-2S-PS1MG-10','backup:veeam:ess-universal-migration','Express migration Essentials Std -> Universal -> lic_yr']
 ];
 /**
  * Upsert the alias mappings: FILL the sku_key of existing blank rows (the discovery sweep
@@ -409,6 +509,11 @@ function runIngest_(query, mode, opts) {
   return run;
 }
 
+// Column index of the `superseded` flag inside a Price row as built in reconcile_'s toAppend.push
+// below (price_id,sku_key,product,vendor,model,price_type,amount,currency,qty_basis,effective_date,
+// SUPERSEDED,...). Keep in sync with that array if columns ever change.
+var PRICE_SUPERSEDED_IDX = 10;
+
 /**
  * Append-with-history reconciliation for one (sku_key, price_type). Newest effective_date in
  * the group is the active row (superseded=FALSE); all older rows get superseded=TRUE. Exact
@@ -419,12 +524,20 @@ function reconcile_(sku, ptype, it, ctx, state, toAppend, supersedeRowIdx, run) 
   var group = state.byKey[sku + '|' + ptype] || (state.byKey[sku + '|' + ptype] = []);
   if (state.byId[priceId] || pendingHas_(toAppend, priceId)) return;   // already have this exact row
 
-  // Determine the newest effective date across existing + this new row.
+  // Determine the newest effective date across existing + pending + this new row.
   var newest = ctx.effDate;
   group.forEach(function (g) { if (g.eff > newest) newest = g.eff; });
 
-  // Supersede any existing active row older than the newest.
-  group.forEach(function (g) { if (g.eff < newest && !g.superseded) supersedeRowIdx[g.rowIndex] = true; });
+  // Supersede any still-active row older than the newest. An EXISTING sheet row is flipped in the
+  // sheet via supersedeRowIdx (1-based row). A row still PENDING in this run (rowIndex < 0) is flipped
+  // in place in toAppend by its captured index — never via getRange (a -1 row crashes applySupersede_).
+  group.forEach(function (g) {
+    if (g.eff < newest && !g.superseded) {
+      g.superseded = true;
+      if (g.rowIndex > 0) supersedeRowIdx[g.rowIndex] = true;
+      else if (g.appendIdx != null) toAppend[g.appendIdx][PRICE_SUPERSEDED_IDX] = 'TRUE';
+    }
+  });
 
   var isActive = (ctx.effDate >= newest);          // new row active only if it's the newest
   var parts = sku.split(':');
@@ -433,8 +546,7 @@ function reconcile_(sku, ptype, it, ctx, state, toAppend, supersedeRowIdx, run) 
     ptype, it.unit_thb, 'THB', 'per_unit', ctx.effDate, isActive ? 'FALSE' : 'TRUE',
     'email', 'gmail:' + ctx.msgId, '🟢', '[EXT email ' + ctx.effDate + ']', ctx.subject, nowIso_()
   ]);
-  group.push({ rowIndex: -1, eff: ctx.effDate, superseded: !isActive });
-  run.upserted; // counted at write time
+  group.push({ rowIndex: -1, appendIdx: toAppend.length - 1, eff: ctx.effDate, superseded: !isActive });
 }
 
 // ---------------------------------------------------------------------------
@@ -523,14 +635,31 @@ function isSpreadsheetAttachment_(att) {
   return /\.xlsx?$/.test(name) || ct.indexOf('spreadsheetml') !== -1 || ct.indexOf('ms-excel') !== -1;
 }
 
-/** Convert an xlsx blob → temp Google Sheet (Drive v2 advanced service), read every sheet, trash it. */
+/** A spreadsheet Blob with the right content type so Drive converts it (handles .xlsx and legacy .xls). */
+function spreadsheetBlob_(att) {
+  var blob = att.copyBlob(), name = String(att.getName() || '').toLowerCase();
+  if (/\.xlsx$/.test(name)) blob.setContentType(MimeType.MICROSOFT_EXCEL);
+  else if (/\.xls$/.test(name)) blob.setContentType('application/vnd.ms-excel');
+  return blob;
+}
+
+/**
+ * Upload a spreadsheet blob as a converted Google Sheet, version-agnostically. The Apps Script
+ * Advanced Drive service may be v3 (Files.create, conversion implied by the target mimeType) or the
+ * older v2 (Files.insert + {convert:true}). Try v3 first, fall back to v2.
+ */
+function insertConvertedSheet_(title, blob) {
+  if (Drive.Files.create) {                                  // Drive advanced service v3
+    return Drive.Files.create({ name: title, mimeType: MimeType.GOOGLE_SHEETS }, blob);
+  }
+  return Drive.Files.insert({ title: title, mimeType: MimeType.GOOGLE_SHEETS }, blob, { convert: true }); // v2
+}
+
+/** Convert a spreadsheet attachment → temp Google Sheet (Drive advanced service), read every tab, trash it. */
 function readXlsxBlob_(att) {
   var out = [], fileId = null, name = (att.getName && att.getName()) || '?';
   try {
-    var file = Drive.Files.insert(
-      { title: '_pos_ingest_tmp_' + Date.now(), mimeType: MimeType.GOOGLE_SHEETS },
-      att.copyBlob().setContentType(MimeType.MICROSOFT_EXCEL),
-      { convert: true });
+    var file = insertConvertedSheet_('_pos_ingest_tmp_' + Date.now(), spreadsheetBlob_(att));
     fileId = file.id;
     var sheets = SpreadsheetApp.openById(fileId).getSheets();
     for (var s = 0; s < sheets.length; s++) {
@@ -541,7 +670,7 @@ function readXlsxBlob_(att) {
   } catch (e) {
     Logger.log('xlsx parse failed for attachment "' + name + '": ' + (e && e.message || e));
   } finally {
-    if (fileId) { try { Drive.Files.remove(fileId); } catch (e2) {} }   // always clean up the temp file
+    if (fileId) { try { DriveApp.getFileById(fileId).setTrashed(true); } catch (e2) {} }   // version-agnostic cleanup
   }
   return out;
 }
@@ -578,8 +707,11 @@ function toNum_(s) { var n = parseFloat(String(s).replace(/[^0-9.\-]/g, '')); re
 /** Classify a line into a Price.price_type from part-number / description hints. */
 function classifyPriceType_(part, desc) {
   var s = (part + ' ' + desc).toLowerCase();
-  if (/\bcon-|sntc|\bsnt\b|\bma\b|support|maintenance|service/.test(s)) return 'support_yr';
-  if (/lic|licen|subscription|term|dna|-3y|-1y|-5y/.test(s)) return 'lic_yr';
+  // support/maintenance: Cisco CON-/SNTC/SNT, "MA", net.cover (Allied-Telesis), advance(d) replacement
+  // (Fortinet AR), warranty/RMA, plus plain support/maintenance/service.
+  if (/\bcon-|sntc|\bsnt\b|\bma\b|support|maintenance|service|net\.?cover|advance[d]? replacement|\bwarranty\b|\brma\b/.test(s)) return 'support_yr';
+  // license/subscription: lic(ense), subscription, term, DNA, N-year terms, and Device/User CALs.
+  if (/lic|licen|subscription|term|dna|-3y|-1y|-5y|(device|user)\s*cal/.test(s)) return 'lic_yr';
   return 'hw';
 }
 
@@ -628,7 +760,11 @@ function readPriceState_(ss) {
 function applySupersede_(ss, supersedeRowIdx) {
   var idxs = Object.keys(supersedeRowIdx); if (!idxs.length) return;
   var d = sheetData_(ss, 'Price'), c = d.col.superseded + 1;
-  idxs.forEach(function (rowIdx) { d.sh.getRange(parseInt(rowIdx, 10), c).setValue('TRUE'); });
+  idxs.forEach(function (rowIdx) {
+    var n = parseInt(rowIdx, 10);
+    if (!(n >= 2)) return;                            // defensive: only real data rows (header is row 1)
+    d.sh.getRange(n, c).setValue('TRUE');
+  });
 }
 
 function appendRows_(ss, name, rows) {
