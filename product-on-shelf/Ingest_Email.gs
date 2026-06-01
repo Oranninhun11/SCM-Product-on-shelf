@@ -62,7 +62,6 @@ var INGEST = {
   DISCOVER_SCAN_ALL: false,                   // false = price-intent net (domains/[EXT]/price-subjects) — far fewer
                                               // Gmail reads than whole-inbox; avoids the daily "premium gmail" quota.
   DAILY_WINDOW: '2d',                         // daily overlap window; price_id dedupe makes it idempotent
-  BACKFILL_MONTHS: 9,                         // initial one-time (narrow) backfill window
   DISCOVER_MONTHS: 12,                        // discoverAllPriceMail() comprehensive sweep window
   MAX_THREADS: 250,                           // cap per run for daily/backfill (Gmail/exec-time safety)
   DISCOVER_THREADS: 400,                      // cap per discovery run (≤500 Gmail max; cursor walks older across runs)
@@ -125,34 +124,6 @@ function isFromDistributor_(from) {
 /** Daily trigger target: ingest recent distributor / [EXT] price mails. */
 function ingestEmailPrices() {
   return runIngest_(buildQuery_('newer_than:' + INGEST.DAILY_WINDOW), 'daily');
-}
-
-/**
- * One-time historical backfill (run manually). Gated by _meta.email_backfill_done so it
- * only does real work once; safe to re-run (price_id dedupe). Sets the flag when it
- * completes within the time budget.
- */
-function backfillEmailPrices() {
-  var ss = db_();
-  if (metaGet_(ss, 'email_backfill_done') === 'TRUE') {
-    Logger.log('Backfill already done — nothing to do.');
-    return 'backfill already done';
-  }
-  var q = buildQuery_('newer_than:' + INGEST.BACKFILL_MONTHS + 'm');
-  var res = runIngest_(q, 'backfill');
-  if (!res.timedOut && !INGEST.DRY_RUN) metaSet_(ss, 'email_backfill_done', 'TRUE');
-  return res;
-}
-
-/**
- * Clear the backfill gate so backfillEmailPrices() will run the 9-month sweep again.
- * Use before re-running the one-time initial load. Does NOT delete Price data —
- * append-with-history + price_id dedupe make re-runs safe (no duplicates).
- */
-function resetBackfill() {
-  var ss = db_();
-  metaSet_(ss, 'email_backfill_done', 'FALSE');
-  Logger.log('Backfill gate cleared — backfillEmailPrices() will sweep ' + INGEST.BACKFILL_MONTHS + ' months again.');
 }
 
 /**
