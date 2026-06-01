@@ -29,6 +29,14 @@
       var thb = function (n) { return '฿' + Math.round(n).toLocaleString('en-US'); };
       var round1k = function (n) { return Math.round(n / 1000) * 1000; };
 
+      // Brand grouping for the price list: items may carry an explicit `brand`; else fall back to the
+      // leading word. modelShort() drops a brand prefix so hardware can show the model name only.
+      function brandOf(it) { return (it && it.brand) ? it.brand : (String((it && it.model) || '').split(/\s+/)[0] || '—'); }
+      function modelShort(model, brand) {
+        var m = String(model || '');
+        return (brand && m.toLowerCase().indexOf(brand.toLowerCase()) === 0) ? (m.slice(brand.length).trim() || m) : m;
+      }
+
       // ---- Shared commercial knobs (identical seams to the sizing flows / fwlist) ----
       var SLA_MULT  = (P.multipliers && P.multipliers.sla)      || { nbd: 1.0, '8x5x4': 1.25, '24x7x4': 1.6 };
       var LOC_MULT  = (P.multipliers && P.multipliers.location) || { bkk: 1.0, upcountry: 1.18 };
@@ -59,56 +67,62 @@
       var DEFAULTS = {
         // ---- Hardware: one-time price per unit ----
         router: { label: 'Router / SD-WAN', icon: 'route', qtyLabel: 'Units', subscription: false, items: [
-          { model: 'FortiGate 40F', price: 22000, unit: 'each' }, { model: 'FortiGate 80F', price: 45000, unit: 'each' }, { model: 'FortiGate 100F', price: 95000, unit: 'each' },
-          { model: 'Meraki MX68', price: 28000, unit: 'each' }, { model: 'Meraki MX85', price: 60000, unit: 'each' }, { model: 'Meraki MX95', price: 120000, unit: 'each' } ] },
+          { brand: 'Fortinet', model: 'FortiGate 40F', price: 22000, unit: 'each' }, { brand: 'Fortinet', model: 'FortiGate 80F', price: 45000, unit: 'each' }, { brand: 'Fortinet', model: 'FortiGate 100F', price: 95000, unit: 'each' },
+          { brand: 'Meraki', model: 'Meraki MX68', price: 28000, unit: 'each' }, { brand: 'Meraki', model: 'Meraki MX85', price: 60000, unit: 'each' }, { brand: 'Meraki', model: 'Meraki MX95', price: 120000, unit: 'each' } ] },
         switch: { label: 'Network Switch', icon: 'network', qtyLabel: 'Units', subscription: false, items: [
-          { model: 'Cisco C9200L-24P', price: 95000, unit: 'each' }, { model: 'Cisco C9200L-48P', price: 155000, unit: 'each' },
-          { model: 'Aruba CX 6300M-24', price: 78000, unit: 'each' }, { model: 'Aruba CX 6300M-48', price: 135000, unit: 'each' } ] },
+          { brand: 'Cisco', model: 'Cisco C9200L-24P', price: 95000, unit: 'each' }, { brand: 'Cisco', model: 'Cisco C9200L-48P', price: 155000, unit: 'each' },
+          { brand: 'Aruba', model: 'Aruba CX 6300M-24', price: 78000, unit: 'each' }, { brand: 'Aruba', model: 'Aruba CX 6300M-48', price: 135000, unit: 'each' } ] },
         adc: { label: 'Load balancer / ADC', icon: 'scale', qtyLabel: 'Units', subscription: false, items: [
-          { model: 'F5 BIG-IP r2600', price: 380000, unit: 'each' }, { model: 'F5 BIG-IP r4600', price: 650000, unit: 'each' }, { model: 'F5 BIG-IP r5600', price: 1100000, unit: 'each' },
-          { model: 'Citrix MPX 5901', price: 320000, unit: 'each' }, { model: 'Citrix MPX 8905', price: 580000, unit: 'each' }, { model: 'Citrix MPX 8920', price: 980000, unit: 'each' } ] },
+          { brand: 'F5', model: 'F5 BIG-IP r2600', price: 380000, unit: 'each' }, { brand: 'F5', model: 'F5 BIG-IP r4600', price: 650000, unit: 'each' }, { brand: 'F5', model: 'F5 BIG-IP r5600', price: 1100000, unit: 'each' },
+          { brand: 'Citrix', model: 'Citrix MPX 5901', price: 320000, unit: 'each' }, { brand: 'Citrix', model: 'Citrix MPX 8905', price: 580000, unit: 'each' }, { brand: 'Citrix', model: 'Citrix MPX 8920', price: 980000, unit: 'each' } ] },
         wireless: { label: 'Wireless (AP/WLC)', icon: 'wifi', qtyLabel: 'Access points', subscription: false, items: [
-          { model: 'Cisco Catalyst 9120AXI', price: 32000, unit: 'per AP' }, { model: 'Cisco Catalyst 9136', price: 48000, unit: 'per AP' }, { model: 'Cisco Catalyst CW9176', price: 62000, unit: 'per AP' },
-          { model: 'Aruba AP-535', price: 28000, unit: 'per AP' }, { model: 'Aruba AP-635', price: 42000, unit: 'per AP' }, { model: 'Aruba AP-735', price: 58000, unit: 'per AP' } ] },
+          { brand: 'Cisco', model: 'Cisco Catalyst 9120AXI', price: 32000, unit: 'per AP' }, { brand: 'Cisco', model: 'Cisco Catalyst 9136', price: 48000, unit: 'per AP' }, { brand: 'Cisco', model: 'Cisco Catalyst CW9176', price: 62000, unit: 'per AP' },
+          { brand: 'Aruba', model: 'Aruba AP-535', price: 28000, unit: 'per AP' }, { brand: 'Aruba', model: 'Aruba AP-635', price: 42000, unit: 'per AP' }, { brand: 'Aruba', model: 'Aruba AP-735', price: 58000, unit: 'per AP' } ] },
         hci: { label: 'Server / HCI', icon: 'server', qtyLabel: 'Nodes', subscription: false, items: [
-          { model: 'Nutanix NX-3155-G9', price: 1150000, unit: 'per node (hw)' }, { model: 'Supermicro SYS-2125H (Proxmox)', price: 720000, unit: 'per node (hw)' } ] },
+          { brand: 'Nutanix', model: 'Nutanix NX-3155-G9', price: 1150000, unit: 'per node (hw)' }, { brand: 'Supermicro', model: 'Supermicro SYS-2125H (Proxmox)', price: 720000, unit: 'per node (hw)' } ] },
         server: { label: 'Standalone Server', icon: 'cpu', qtyLabel: 'Servers', subscription: false, items: [
-          { model: 'Dell PowerEdge R660', price: 180000, unit: 'base config' }, { model: 'Dell PowerEdge R760', price: 280000, unit: 'base config' },
-          { model: 'HPE ProLiant DL360 Gen11', price: 175000, unit: 'base config' }, { model: 'HPE ProLiant DL380 Gen11', price: 275000, unit: 'base config' } ] },
+          { brand: 'Dell', model: 'Dell PowerEdge R660', price: 180000, unit: 'base config' }, { brand: 'Dell', model: 'Dell PowerEdge R760', price: 280000, unit: 'base config' },
+          { brand: 'HPE', model: 'HPE ProLiant DL360 Gen11', price: 175000, unit: 'base config' }, { brand: 'HPE', model: 'HPE ProLiant DL380 Gen11', price: 275000, unit: 'base config' } ] },
         storage: { label: 'Storage', icon: 'hard-drive', qtyLabel: 'Arrays', subscription: false, items: [
-          { model: 'Dell PowerStore 500T', price: 850000, unit: 'per array' }, { model: 'Dell PowerStore 1200T', price: 1500000, unit: 'per array' }, { model: 'Dell PowerStore 3200T', price: 2600000, unit: 'per array' },
-          { model: 'NetApp AFF A250', price: 780000, unit: 'per array' }, { model: 'NetApp AFF A400', price: 1650000, unit: 'per array' }, { model: 'NetApp AFF A800', price: 2900000, unit: 'per array' } ] },
+          { brand: 'Dell', model: 'Dell PowerStore 500T', price: 850000, unit: 'per array' }, { brand: 'Dell', model: 'Dell PowerStore 1200T', price: 1500000, unit: 'per array' }, { brand: 'Dell', model: 'Dell PowerStore 3200T', price: 2600000, unit: 'per array' },
+          { brand: 'NetApp', model: 'NetApp AFF A250', price: 780000, unit: 'per array' }, { brand: 'NetApp', model: 'NetApp AFF A400', price: 1650000, unit: 'per array' }, { brand: 'NetApp', model: 'NetApp AFF A800', price: 2900000, unit: 'per array' } ] },
         ups: { label: 'UPS / Power', icon: 'battery-charging', qtyLabel: 'Units', subscription: false, items: [
-          { model: 'APC Smart-UPS SRT 3000', price: 65000, unit: 'each' }, { model: 'APC Smart-UPS SRT 6000', price: 120000, unit: 'each' }, { model: 'APC Symmetra 10kVA', price: 280000, unit: 'each' }, { model: 'APC Symmetra 20kVA', price: 480000, unit: 'each' },
-          { model: 'Vertiv Liebert GXT5 3kVA', price: 58000, unit: 'each' }, { model: 'Vertiv Liebert GXT5 6kVA', price: 110000, unit: 'each' }, { model: 'Vertiv Liebert APM 10kVA', price: 260000, unit: 'each' }, { model: 'Vertiv Liebert APM 20kVA', price: 450000, unit: 'each' } ] },
+          { brand: 'APC', model: 'APC Smart-UPS SRT 3000', price: 65000, unit: 'each' }, { brand: 'APC', model: 'APC Smart-UPS SRT 6000', price: 120000, unit: 'each' }, { brand: 'APC', model: 'APC Symmetra 10kVA', price: 280000, unit: 'each' }, { brand: 'APC', model: 'APC Symmetra 20kVA', price: 480000, unit: 'each' },
+          { brand: 'Vertiv', model: 'Vertiv Liebert GXT5 3kVA', price: 58000, unit: 'each' }, { brand: 'Vertiv', model: 'Vertiv Liebert GXT5 6kVA', price: 110000, unit: 'each' }, { brand: 'Vertiv', model: 'Vertiv Liebert APM 10kVA', price: 260000, unit: 'each' }, { brand: 'Vertiv', model: 'Vertiv Liebert APM 20kVA', price: 450000, unit: 'each' } ] },
+        cabling: { label: 'Cabling & SFP+', icon: 'cable', qtyLabel: 'Units', subscription: false, accessory: true, items: [
+          { brand: 'Cisco', model: 'Cisco GLC-TE (1000BASE-T SFP)', price: 4500, unit: 'each' }, { brand: 'Cisco', model: 'Cisco SFP-10G-SR (10G SR)', price: 9000, unit: 'each' }, { brand: 'Cisco', model: 'Cisco SFP-10G-LR (10G LR)', price: 16000, unit: 'each' }, { brand: 'Cisco', model: 'Cisco SFP-H10GB-CU3M (10G DAC 3m)', price: 5500, unit: 'each' },
+          { brand: 'Allied Telesis', model: 'Allied Telesis AT-SPSX (1000BASE-SX)', price: 3800, unit: 'each' }, { brand: 'Allied Telesis', model: 'Allied Telesis AT-SP10SR (10G SR)', price: 7800, unit: 'each' }, { brand: 'Allied Telesis', model: 'Allied Telesis AT-SP10TW3 (10G DAC 3m)', price: 4200, unit: 'each' },
+          { brand: 'H3C', model: 'H3C SFP-XG-LH40-SM1550 (10G ER 40km)', price: 12000, unit: 'each' },
+          { brand: 'Fibre', model: 'OM4 LC-LC duplex patch 5m', price: 850, unit: 'each' }, { brand: 'Fibre', model: 'OM4 LC-LC duplex patch 10m', price: 1200, unit: 'each' },
+          { brand: 'Copper', model: 'Cat6A U/UTP patch 3m', price: 250, unit: 'each' }, { brand: 'Copper', model: 'Cat6A U/UTP patch 5m', price: 350, unit: 'each' } ] },
         // ---- Software: one-time perpetual licenses (sw layout, no term) ----
         ws: { label: 'Windows Server', icon: 'server-cog', qtyLabel: 'Quantity', subscription: false, sw: true, items: [
-          { model: 'Windows Server Standard', price: 4500, unit: 'per 2-core pack' }, { model: 'Windows Server Datacenter', price: 26000, unit: 'per 2-core pack' },
-          { model: 'User CAL', price: 1400, unit: 'per CAL' }, { model: 'Device CAL', price: 1200, unit: 'per CAL' } ] },
+          { brand: 'Microsoft', model: 'Windows Server Standard', price: 4500, unit: 'per 2-core pack' }, { brand: 'Microsoft', model: 'Windows Server Datacenter', price: 26000, unit: 'per 2-core pack' },
+          { brand: 'Microsoft', model: 'User CAL', price: 1400, unit: 'per CAL' }, { brand: 'Microsoft', model: 'Device CAL', price: 1200, unit: 'per CAL' } ] },
         // ---- Software: per-unit-per-year subscriptions (term applies) ----
         backup: { label: 'Backup & DR', icon: 'database-backup', qtyLabel: 'Instances', subscription: true, items: [
-          { model: 'Veeam Data Platform', price: 18000, unit: 'per instance/yr' }, { model: 'Commvault Cloud', price: 22000, unit: 'per instance/yr' } ] },
+          { brand: 'Veeam', model: 'Veeam Data Platform', price: 18000, unit: 'per instance/yr' }, { brand: 'Commvault', model: 'Commvault Cloud', price: 22000, unit: 'per instance/yr' } ] },
         m365: { label: 'Microsoft 365', icon: 'briefcase', qtyLabel: 'Users', subscription: true, items: [
-          { model: 'M365 Business Standard', price: 5600, unit: 'per user/yr' }, { model: 'M365 Business Premium', price: 9800, unit: 'per user/yr' }, { model: 'Microsoft 365 E3', price: 15600, unit: 'per user/yr' } ] },
+          { brand: 'Microsoft', model: 'M365 Business Standard', price: 5600, unit: 'per user/yr' }, { brand: 'Microsoft', model: 'M365 Business Premium', price: 9800, unit: 'per user/yr' }, { brand: 'Microsoft', model: 'Microsoft 365 E3', price: 15600, unit: 'per user/yr' } ] },
         virt: { label: 'Virtualization', icon: 'layers', qtyLabel: 'Cores / sockets', subscription: true, items: [
-          { model: 'VMware vSphere Standard', price: 3000, unit: 'per core/yr' }, { model: 'VMware vSphere Foundation', price: 5000, unit: 'per core/yr' }, { model: 'VMware Cloud Foundation', price: 9000, unit: 'per core/yr' },
-          { model: 'Nutanix NCI Starter', price: 2500, unit: 'per core/yr' }, { model: 'Nutanix NCI Pro', price: 4200, unit: 'per core/yr' }, { model: 'Nutanix NCI Ultimate', price: 6500, unit: 'per core/yr' },
-          { model: 'Proxmox VE Basic', price: 9000, unit: 'per socket/yr' }, { model: 'Proxmox VE Premium', price: 35000, unit: 'per socket/yr' } ] },
+          { brand: 'VMware', model: 'VMware vSphere Standard', price: 3000, unit: 'per core/yr' }, { brand: 'VMware', model: 'VMware vSphere Foundation', price: 5000, unit: 'per core/yr' }, { brand: 'VMware', model: 'VMware Cloud Foundation', price: 9000, unit: 'per core/yr' },
+          { brand: 'Nutanix', model: 'Nutanix NCI Starter', price: 2500, unit: 'per core/yr' }, { brand: 'Nutanix', model: 'Nutanix NCI Pro', price: 4200, unit: 'per core/yr' }, { brand: 'Nutanix', model: 'Nutanix NCI Ultimate', price: 6500, unit: 'per core/yr' },
+          { brand: 'Proxmox', model: 'Proxmox VE Basic', price: 9000, unit: 'per socket/yr' }, { brand: 'Proxmox', model: 'Proxmox VE Premium', price: 35000, unit: 'per socket/yr' } ] },
         endpoint: { label: 'Endpoint Security', icon: 'shield-check', qtyLabel: 'Endpoints', subscription: true, items: [
-          { model: 'CrowdStrike Falcon Go (EPP)', price: 1200, unit: 'per endpoint/yr' }, { model: 'CrowdStrike Falcon Enterprise (EDR)', price: 2200, unit: 'per endpoint/yr' }, { model: 'CrowdStrike Falcon Complete (XDR)', price: 3200, unit: 'per endpoint/yr' },
-          { model: 'Trend Apex One (EPP)', price: 950, unit: 'per endpoint/yr' }, { model: 'Trend Vision One EDR', price: 1700, unit: 'per endpoint/yr' }, { model: 'Trend Vision One XDR', price: 2600, unit: 'per endpoint/yr' } ] },
+          { brand: 'CrowdStrike', model: 'CrowdStrike Falcon Go (EPP)', price: 1200, unit: 'per endpoint/yr' }, { brand: 'CrowdStrike', model: 'CrowdStrike Falcon Enterprise (EDR)', price: 2200, unit: 'per endpoint/yr' }, { brand: 'CrowdStrike', model: 'CrowdStrike Falcon Complete (XDR)', price: 3200, unit: 'per endpoint/yr' },
+          { brand: 'Trend Micro', model: 'Trend Apex One (EPP)', price: 950, unit: 'per endpoint/yr' }, { brand: 'Trend Micro', model: 'Trend Vision One EDR', price: 1700, unit: 'per endpoint/yr' }, { brand: 'Trend Micro', model: 'Trend Vision One XDR', price: 2600, unit: 'per endpoint/yr' } ] },
         nac: { label: 'NAC', icon: 'fingerprint', qtyLabel: 'Endpoints', subscription: true, items: [
-          { model: 'Cisco ISE (license)', price: 450, unit: 'per endpoint/yr' }, { model: 'Aruba ClearPass (license)', price: 380, unit: 'per endpoint/yr' } ] },
+          { brand: 'Cisco', model: 'Cisco ISE (license)', price: 450, unit: 'per endpoint/yr' }, { brand: 'Aruba', model: 'Aruba ClearPass (license)', price: 380, unit: 'per endpoint/yr' } ] },
         dlp: { label: 'DLP', icon: 'file-lock-2', qtyLabel: 'Users', subscription: true, items: [
-          { model: 'Forcepoint Endpoint', price: 900, unit: 'per user/yr' }, { model: 'Forcepoint Network', price: 1100, unit: 'per user/yr' }, { model: 'Forcepoint Endpoint + Network', price: 1700, unit: 'per user/yr' },
-          { model: 'Trellix Endpoint', price: 800, unit: 'per user/yr' }, { model: 'Trellix Network', price: 1000, unit: 'per user/yr' }, { model: 'Trellix Endpoint + Network', price: 1500, unit: 'per user/yr' } ] },
+          { brand: 'Forcepoint', model: 'Forcepoint Endpoint', price: 900, unit: 'per user/yr' }, { brand: 'Forcepoint', model: 'Forcepoint Network', price: 1100, unit: 'per user/yr' }, { brand: 'Forcepoint', model: 'Forcepoint Endpoint + Network', price: 1700, unit: 'per user/yr' },
+          { brand: 'Trellix', model: 'Trellix Endpoint', price: 800, unit: 'per user/yr' }, { brand: 'Trellix', model: 'Trellix Network', price: 1000, unit: 'per user/yr' }, { brand: 'Trellix', model: 'Trellix Endpoint + Network', price: 1500, unit: 'per user/yr' } ] },
         esec: { label: 'Email & SASE', icon: 'mail-check', qtyLabel: 'Users', subscription: true, items: [
-          { model: 'Mimecast Email Security', price: 1100, unit: 'per user/yr' }, { model: 'Proofpoint Email Protection', price: 1300, unit: 'per user/yr' },
-          { model: 'Zscaler Internet Access (ZIA)', price: 2400, unit: 'per user/yr' }, { model: 'Netskope Intelligent SSE', price: 2100, unit: 'per user/yr' } ] },
+          { brand: 'Mimecast', model: 'Mimecast Email Security', price: 1100, unit: 'per user/yr' }, { brand: 'Proofpoint', model: 'Proofpoint Email Protection', price: 1300, unit: 'per user/yr' },
+          { brand: 'Zscaler', model: 'Zscaler Internet Access (ZIA)', price: 2400, unit: 'per user/yr' }, { brand: 'Netskope', model: 'Netskope Intelligent SSE', price: 2100, unit: 'per user/yr' } ] },
         captive: { label: 'Captive portal', icon: 'log-in', qtyLabel: 'Sites', subscription: true, items: [
-          { model: 'Aruba ClearPass Guest', price: 60000, unit: 'per site/yr' }, { model: 'Cisco ISE Guest', price: 75000, unit: 'per site/yr' } ] },
+          { brand: 'Aruba', model: 'Aruba ClearPass Guest', price: 60000, unit: 'per site/yr' }, { brand: 'Cisco', model: 'Cisco ISE Guest', price: 75000, unit: 'per site/yr' } ] },
         siem: { label: 'Logging / SIEM', icon: 'scroll-text', qtyLabel: 'GB/day', subscription: true, items: [
-          { model: 'Splunk Enterprise Security', price: 60000, unit: 'per GB/day/yr' }, { model: 'Microsoft Sentinel', price: 32000, unit: 'per GB/day/yr' } ] }
+          { brand: 'Splunk', model: 'Splunk Enterprise Security', price: 60000, unit: 'per GB/day/yr' }, { brand: 'Microsoft', model: 'Microsoft Sentinel', price: 32000, unit: 'per GB/day/yr' } ] }
       };
 
       function cfgFor(key) {
@@ -138,24 +152,38 @@
         var cfg = cfgFor(key);
         if (!cfg || !cfg.items || !cfg.items.length) return;
         var items = cfg.items, sub = !!cfg.subscription, isSw = sub || cfg.sw === true;
+        var accessory = cfg.accessory === true;   // L1 media etc.: device only — no MA/SLA/SOW/location/support
         var qtyLabel = cfg.qtyLabel || 'Quantity';
         var sowOpts = (isSw ? SW_SOW : HW_SOW);
         var sowSelect = [['basic', sowOpts.basic], ['standard', sowOpts.standard, true], ['complex', sowOpts.complex]];
 
-        var skuField = field('SKU',
-          '<select class="select" data-role="model">' +
-            items.map(function (it, i) { return '<option value="' + i + '">' + it.model + ' — ' + thb(it.price) + (it.unit ? ' ' + it.unit : '') + '</option>'; }).join('') +
+        // Brand filter → Model. Model shows the model name only (no price); hardware also strips the
+        // brand prefix. The <option> value stays the item's original index, so pricing is unchanged.
+        var brands = [];
+        items.forEach(function (it) { var b = brandOf(it); if (brands.indexOf(b) < 0) brands.push(b); });
+        function modelLabel(it) { return isSw ? it.model : modelShort(it.model, brandOf(it)); }
+        function modelOptionsFor(brand) {
+          return items.map(function (it, i) { return { i: i, it: it }; })
+            .filter(function (x) { return brandOf(x.it) === brand; })
+            .map(function (x) { return '<option value="' + x.i + '">' + modelLabel(x.it) + '</option>'; }).join('');
+        }
+        var brandField = field('Brand',
+          '<select class="select" data-role="brand">' +
+            brands.map(function (b, i) { return '<option value="' + b.replace(/"/g, '&quot;') + '"' + (i === 0 ? ' selected' : '') + '>' + b + '</option>'; }).join('') +
           '</select>');
+        var modelField = field('Model', '<select class="select" data-role="model">' + modelOptionsFor(brands[0]) + '</select>');
         var qtyField = field(qtyLabel, '<input type="number" min="1" value="1" class="input" data-role="qty" />');
 
         var optionFields;
-        if (isSw) {
-          optionFields = skuField + qtyField +
+        if (accessory) {
+          optionFields = brandField + modelField + qtyField;
+        } else if (isSw) {
+          optionFields = brandField + modelField + qtyField +
             (sub ? field('Term', selectHtml('term', TERM_OPTS)) : '') +
             field('SOW scope (onboarding)', selectHtml('sow', sowSelect)) +
             field('Location', selectHtml('loc', LOC_OPTS));
         } else {
-          optionFields = skuField + qtyField +
+          optionFields = brandField + modelField + qtyField +
             field('License / MA term', selectHtml('term', TERM_OPTS)) +
             field('SLA tier', selectHtml('sla', SLA_OPTS)) +
             field('SOW scope (implementation)', selectHtml('sow', sowSelect)) +
@@ -166,10 +194,13 @@
               '<input type="checkbox" class="h-4 w-4 rounded border-border accent-brand-navy" data-role="site" checked /> Include site preparation</label>';
         }
 
+        var pickDesc = accessory
+          ? 'Pick a brand and model from the price list, then the quantity.'
+          : 'Pick a brand and model from the price list, then the commercial options.';
         host.innerHTML =
           '<div class="card mt-6">' +
             '<div class="card-header"><div class="card-title">Model &amp; options</div>' +
-              '<div class="card-desc">Pick a SKU straight from the price list, then the commercial options.</div></div>' +
+              '<div class="card-desc">' + pickDesc + '</div></div>' +
             '<div class="card-content grid gap-4 sm:grid-cols-2 lg:grid-cols-3">' + optionFields + '</div>' +
           '</div>' +
           '<div class="mt-6 flex flex-wrap items-baseline justify-between gap-2">' +
@@ -183,11 +214,16 @@
         function render() {
           var it = items[Math.max(0, parseInt(modelEl.value, 10) || 0)];
           var qty = Math.max(1, parseInt(qtyEl.value, 10) || 1);
-          var sow = q('sow').value, loc = q('loc').value;
-          var impl = implFor(key)[sow] * LOC_MULT[loc];
           var rows, descMeta, total;
 
-          if (isSw) {
+          if (accessory) {
+            var devOnly = it.price * qty;
+            total = round1k(devOnly * BUFFER);
+            rows = row('Device (' + qty + ' × ' + thb(it.price) + ')', thb(devOnly));
+            descMeta = it.model + ' · ' + qty + ' ' + (qty > 1 ? 'units' : 'unit');
+          } else if (isSw) {
+            var sow = q('sow').value, loc = q('loc').value;
+            var impl = implFor(key)[sow] * LOC_MULT[loc];
             var years = sub ? parseInt(q('term').value, 10) : 1;
             var license = it.price * qty * years;
             total = round1k((license + impl) * BUFFER);
@@ -197,6 +233,8 @@
                    row('Support', sub ? 'Included in subscription' : 'Included (warranty)');
             descMeta = it.model + ' · ' + qty + (sub ? ' × ' + years + ' yr' : '');
           } else {
+            var sow = q('sow').value, loc = q('loc').value;
+            var impl = implFor(key)[sow] * LOC_MULT[loc];
             var yrs = parseInt(q('term').value, 10), sla = q('sla').value;
             var adv = q('adv').checked, site = q('site').checked;
             var lic = Math.round(it.price * SUPP_RATE);                 // annual MA per unit
@@ -226,9 +264,15 @@
           if (window.lucide) lucide.createIcons();
         }
 
+        var brandEl = q('brand');
         host.querySelectorAll('[data-role]').forEach(function (n) {
-          if (n.getAttribute('data-role') === 'summary') return;
+          var r = n.getAttribute('data-role');
+          if (r === 'summary' || r === 'brand') return;
           ['input', 'change'].forEach(function (ev) { n.addEventListener(ev, render); });
+        });
+        if (brandEl) brandEl.addEventListener('change', function () {
+          modelEl.innerHTML = modelOptionsFor(brandEl.value);   // refill Model for the chosen brand
+          render();
         });
         render();
       }

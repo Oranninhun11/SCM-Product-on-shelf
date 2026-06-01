@@ -19,7 +19,7 @@
 // view yet, so their rows are skipped (the panel falls back to its mock list).
 var POS_CATEGORY_TO_VIEW = {
   switch: 'switch', server: 'server', storage: 'storage', router: 'router', adc: 'adc',
-  ups: 'ups', wireless: 'wireless', hci: 'hci',
+  ups: 'ups', wireless: 'wireless', hci: 'hci', cabling: 'cabling',
   backup: 'backup', nac: 'nac', endpoint: 'endpoint', dlp: 'dlp', captive: 'captive',
   siem: 'siem', virt: 'virt', m365: 'm365', esec: 'esec',
   winsvr: 'ws'   // Windows Server backbone category → the "ws" price-list view
@@ -75,7 +75,7 @@ function posBuildPricing_(rows) {
     var label = (vendor + ' ' + String(r.model).toUpperCase()).trim();
     var unit = r.type === 'hw' ? 'each' : 'per unit/yr';
     (out[view] || (out[view] = { pricelist: [] })).pricelist.push(
-      { model: label, price: Math.round(r.amount), unit: unit });
+      { brand: vendor, model: label, price: Math.round(r.amount), unit: unit });
   });
 
   // Cheapest first within each view — stable, readable order.

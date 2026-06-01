@@ -35,7 +35,12 @@
 
       var modelEl = el('fwl-model');
       if (!modelEl) return;             // panel not on the page
+      var brandEl = el('fwl-brand');
       var sumEl = el('fwl-summary');
+
+      // Items may carry an explicit brand; the firewall price list is Fortinet today.
+      function brandOf(s) { return (s && s.brand) ? s.brand : 'Fortinet'; }
+      function slugify(s) { return String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-'); }
 
       function chosen() {
         var id = modelEl.value;
@@ -70,12 +75,13 @@
 
       function render() {
         var s = chosen(), inp = readInputs(), r = price(s, inp);
+        var brand = brandOf(s), slug = slugify(brand);
         sumEl.innerHTML =
-          '<div class="card flex flex-col" data-family="fortinet">' +
+          '<div class="card flex flex-col" data-family="' + slug + '">' +
             '<div class="card-header">' +
               '<div class="flex items-center gap-2">' +
                 '<i data-lucide="shield" class="h-4 w-4 text-brand-navy"></i>' +
-                '<div class="card-title">Fortinet</div>' +
+                '<div class="card-title">' + brand + '</div>' +
               '</div>' +
               '<div class="card-desc pt-0.5">' + s.model + ' · ' + inp.units + ' unit' + (inp.units > 1 ? 's' : '') + '</div>' +
             '</div>' +
@@ -90,20 +96,32 @@
                 '<span class="text-sm text-muted-foreground">Est. total</span>' +
                 '<span class="text-xl font-semibold text-brand-navy tabular-nums">' + thb(r.total) + '</span>' +
               '</div>' +
-              '<button class="btn btn-primary w-full" data-select="fortinet">Add to estimate</button>' +
+              '<button class="btn btn-primary w-full" data-select="' + slug + '">Add to estimate</button>' +
             '</div>' +
           '</div>';
         lucide.createIcons();
       }
 
+      // Model dropdown for one brand — model name only (no price; price shows in the Quotation).
+      function populateModels(brand) {
+        modelEl.innerHTML = PRICELIST.filter(function (s) { return brandOf(s) === brand; })
+          .map(function (s) { return '<option value="' + s.id + '">' + s.model + '</option>'; }).join('');
+      }
+
       function init() {
-        modelEl.innerHTML = PRICELIST.map(function (s) {
-          return '<option value="' + s.id + '">' + s.model + ' — ' + thb(s.price) + '</option>';
-        }).join('');
+        var brands = [];
+        PRICELIST.forEach(function (s) { var b = brandOf(s); if (brands.indexOf(b) < 0) brands.push(b); });
+        if (brandEl) {
+          brandEl.innerHTML = brands.map(function (b, i) {
+            return '<option value="' + b.replace(/"/g, '&quot;') + '"' + (i === 0 ? ' selected' : '') + '>' + b + '</option>';
+          }).join('');
+        }
+        populateModels(brandEl ? brandEl.value : brands[0]);
         var nodes = document.querySelectorAll('#fwl-model, #fwl-units, #fwl-years, #fwl-sla, #fwl-sow, #fwl-location, #fwl-adv, #fwl-site');
         ['input', 'change'].forEach(function (evt) {
           nodes.forEach(function (n) { n.addEventListener(evt, render); });
         });
+        if (brandEl) brandEl.addEventListener('change', function () { populateModels(brandEl.value); render(); });
         render();
       }
 

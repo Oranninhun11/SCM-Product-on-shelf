@@ -8,6 +8,7 @@
 function doGet() {
   var t = HtmlService.createTemplateFromFile('index');
   t.PRICING_JSON = posPricingJson_();   // injected into the bootstrap <script> (see ReadPath.gs + build.py)
+  t.USER_JSON = userContextJson_();     // RBAC: window.USER = { email, role } (see Auth.gs + build.py)
   return t.evaluate()
     .setTitle('Product on Shelf')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1')

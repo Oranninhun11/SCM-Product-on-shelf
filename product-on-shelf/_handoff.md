@@ -650,3 +650,218 @@ app landed** (`8b2996b`). Read path still unwired (app serves mock `DEFAULTS`).
 > populated a multi-brand `Price`; curate `_alias` blanks (extend `ALIAS_SEED`). Then the READ path
 > (`Code.gs doGet` → inject `window.PRICING` from `Price`, Firewall parity first) — the last thing between
 > the app and real prices. Then the template-fill quotation export. Commit the uncommitted `Ingest_Email.gs` edits.
+
+---
+
+# Handoff — Product on Shelf (cont.)
+_Session: 2026-06-01 (early AM) · software-engineer mode · crash fix + scan-all + xlsx-v3 + full alias mapping_
+
+## Stage
+Ingestion went LIVE end-to-end this session. `Price` rebuilt from **6 rows → ~90+** (real prices, multi-brand).
+Found + fixed a crash that was silently blocking all writes; widened discovery to the whole inbox; mapped
+every discovered part; fixed the xlsx attachment path for Drive v3. All pushed to Apps Script. **Branch is now
+on GitHub.** `Ingest_Email.gs` edits since commit `a5207e8` are **pushed but NOT committed.**
+
+## What happened (in order)
+1. **Verified #1/#2 live==local** (clasp pull + byte-diff, 67 files, 0 differ).
+2. **Scoped commit `8b2996b`** (product-on-shelf only) + **`a5207e8`** (multi-brand aliases) earlier; then **pushed
+   branch `product-on-shelf-app` to GitHub** remote **`enter`** = `github.com/Oranninhun11/Claude` (`git push`
+   now one-word; upstream set). ⚠️ Oran chose to push the WHOLE branch incl. `CLIENT_TRACKER.md` + `.claude/`
+   presale skills (informed decision — flagged the exposure first; assume repo is private).
+3. **Diagnosed "Price = Cisco only"** → not a fetch problem; the `_alias` map was blank (seedAliases hadn't run).
+   Oran ran it → map filled.
+4. **🔴 CRASH BUG (pre-existing, exposed by volume): `reconcile_` pushed pending rows with `rowIndex:-1`, then a
+   later same-SKU/different-date email sent `-1` into `supersedeRowIdx` → `applySupersede_ getRange(-1)` threw
+   "starting row too small". Killed every write in both backfill + discover.** FIXED: pending rows now superseded
+   in place in `toAppend` (`PRICE_SUPERSEDED_IDX`), never via getRange; `applySupersede_` skips rows < 2;
+   `discoverAllPriceMail` no longer advances the cursor on error. Unit-tested in node (4 scenarios, all orderings,
+   no `-1` leak, exactly one active=newest). Added **`resetPriceData()`** (wipe Price + reset gates/cursors) for
+   clean rebuild — the 6 old Cisco rows had been stranded `superseded=TRUE` by the partial crash.
+5. **`DISCOVER_SCAN_ALL = true`** — discovery now drops the source filter entirely and reads the WHOLE inbox in
+   the window (Oran's explicit ask: "all price mail, not just [EXT]"). Safe via the `_alias` gate.
+6. **Mapped ALL remaining `_alias` blanks (+~20)**: MS Windows Server 2025 (`winsvr:microsoft:*`), MS SQL Server
+   2025 (`sqlserver:microsoft:*`, catalog-only no app flow), H3C optics (`switch:h3c:*`), Allied-Telesis Net.Cover
+   (`switch:alliedtelesis:*`), Veeam Essentials maint/migration (`backup:veeam:ess-*`, distinct models), Quest Toad
+   (`software:quest:*`). **Improved `classifyPriceType_`**: net.cover/advance-replacement→support, Device/User CAL→lic
+   (12/12 node tests pass, existing classifications unchanged).
+7. **Drive API enabled by Oran → #2 active, but it's Drive v3** (`Drive.Files.insert is not a function`). FIXED
+   `readXlsxBlob_`: `insertConvertedSheet_` tries v3 `Files.create` then v2 `Files.insert`; `spreadsheetBlob_`
+   sets correct content-type for `.xlsx`/`.xls`; cleanup via `DriveApp…setTrashed` (version-agnostic). Pushed +
+   **verified live by pulling the script** (`Files.create` present, old call gone).
+
+## Oran's manual GAS steps RIGHT NOW (Claude can't run GAS)
+Re-sweep cleanly so the xlsx files skipped pre-fix (`True Internet Hardware/Software Cost.xlsx` — the firewall/
+server quotes) get read this time:
+1. **`seedAliases()`** — fills the new MS/H3C/AT/Veeam/Toad mappings.
+2. **`resetPriceData()`** — clears Price + resets cursor to newest (re-sweep whole inbox with the working xlsx reader).
+3. **`discoverAllPriceMail()`** — repeat until log says **"COMPLETE"** (each "PARTIAL" → run again; dedupe-safe).
+Then the xlsx-sourced part numbers land in `_alias` BLANK → hand them to Claude for the next mapping round.
+
+## Open / risks
+- 🔴 **Read path STILL unwired** — app serves mock `DEFAULTS`; `Code.gs doGet` must inject `window.PRICING` from
+  the catalog `Price` tab (`DB_SCHEMA.md buildCatalog()`). The last thing between the app and real prices.
+- 🟡 **Working tree uncommitted** — `Ingest_Email.gs` (crash fix + scan-all + recovery + mappings + classify + xlsx-v3)
+  is pushed to Apps Script but not git-committed since `a5207e8`. Commit when the rebuild is confirmed.
+- 🟡 **scan-all + xlsx = slow** — every inbox xlsx (incl. RVTools exports, layouts) is converted/read/trashed;
+  non-price ones yield nothing but cost time. Resumable. Add a filename filter if it drags.
+- 🟡 **classify still heuristic**; `sqlserver`/`software` products are catalog-only (no app flow yet).
+- 🟡 Veeam `V-ESS*` mapped as distinct maint/migration models (not the base license price).
+
+## Decisions (the why)
+- **Broad-is-safe** — `_alias` write-gate means casting wide only adds blank `_alias` rows + runtime, never bad
+  prices. So discovery widens both the search AND the per-message gate; scan-all drops the filter entirely.
+- **Date-cursor resume, not offset paging** — avoids deep-offset limits + premature-done; errored runs must NOT
+  advance the cursor (retry same batch).
+- **`resetPriceData()` for recovery** — prices are re-derivable from mail and nothing reads Price yet, so a clean
+  wipe beats surgically un-stranding the bad `superseded=TRUE` rows.
+- **xlsx path version-agnostic** — v3-first/v2-fallback + DriveApp trash, because the enabled advanced service
+  turned out to be v3 (the handoff's flagged risk came true).
+
+> Resume: `/oran-software-engineer` on `product-on-shelf-app`. Confirm the clean re-sweep (`seedAliases` →
+> `resetPriceData` → `discoverAllPriceMail` to COMPLETE) filled `Price` across switches + servers + the xlsx-sourced
+> firewall/server parts; map the new `_alias` blanks. Then wire the READ path (`Code.gs doGet` → `window.PRICING`
+> from `Price`, Firewall parity first), then the template-fill quotation export. Commit the uncommitted
+> `Ingest_Email.gs` edits (crash fix + scan-all + mappings + xlsx-v3).
+
+---
+
+# Handoff — Product on Shelf (cont.)
+_Session: 2026-06-01 · software-engineer mode · Flow-diagram revision ONLY (no code/ingestion changes)_
+
+## Stage
+Documentation/diagram only. The system is unchanged from the prior session — **🔴 read path still
+unwired** (app serves mock `DEFAULTS`); ingestion (`Ingest_Email.gs`) untouched. This session only
+revised the architecture flow diagram to match the current built flow.
+
+## What changed this session (all in `product-on-shelf/Flow diagram/Product on shelf-3.excalidraw`)
+1. **Email-ingestion labels → current flow:** source node `Email [EXT]` → `Supplier price email / HTML + xlsx · HW & SW`;
+   detail box now reads *by distributor domain (+[EXT]) · HTML tables + xlsx attach · `_alias` maps part→SKU (gate) ·
+   daily + full-inbox discovery* (was the stale `filter [EXT] / ~30 mailboxes / backfill 9mo`).
+2. **Corrected the mechanism (Oran's catch):** the diagram wrongly showed **Webhook** doing the fetch.
+   Rewired BOTH integration clusters (email + GSheet cost/RFQ) so **Google Apps Script** is the engine in
+   the data path (`fetch/read → upsert/ingest → Database`) and **Webhook → Google Chat is notify-only** (side branch).
+3. **Full clean-grid relayout** (Oran: "not clean"): horizontal main-flow band; **Database = 4-edge hub**
+   (HW/SW left · KB top `feeds specs` · email `upsert` right · cost `ingest` bottom); uniform node sizes;
+   all arrows orthogonal (H/V, no diagonals); legend moved down to clear the loop return.
+4. **Diagnosed "text messed up"** = `excalidraw_export` writes `y="NaN"` on every `<text>` (font missing) →
+   garbled PNG. **Render-tool bug only; the `.excalidraw` file is correct.** Produced a corrected hi-res PNG.
+
+## Open questions / decisions
+- 🟡 **Dropped the long note→Database connector arrow** during cleanup — "DB content (GG-Sheet)" is now a
+  standalone labelled annotation (lower-left). Offered to restore the connector.
+- 🟡 Both Apps Script engines push to the central **Database** (kept the original arrow target). Confirm the
+  cost/SOW path shouldn't instead feed **Output / Quotation**.
+- ⚪ Old `Product on shelf.png` (May 29, an earlier diagram) left untouched — offered to replace it.
+- 🔴 **Unchanged blocker:** read path still unwired (`Code.gs doGet` → inject `window.PRICING` from `Price`).
+
+## Next concrete step
+Unchanged from prior session — **wire the READ path**: `Code.gs doGet` → `createTemplateFromFile` + inject
+`window.PRICING` from the catalog `Price` tab (Firewall parity first). The diagram is now current.
+
+## Suggested skills
+- **`/oran-software-engineer`** — code work. For diagrams: render via the **NaN-fix** path
+  (`[[reference-excalidraw-export]]` memory updated this session with the `y="NaN"` gotcha + fix).
+
+## Artifacts produced this session
+- `product-on-shelf/Flow diagram/Product on shelf-3.excalidraw` — revised (flow correction + clean relayout).
+- `product-on-shelf/Flow diagram/Product on shelf-3.png` — **new** hi-res readable export (NaN-fixed).
+- Pre-cleanup backup `/tmp/pos3_backup.excalidraw` (throwaway).
+- Memory `reference_excalidraw_export.md` — added the `excalidraw_export` `y="NaN"` render bug + SVG post-fix.
+
+## Decisions (the why)
+- **Apps Script in the data path, Webhook = notify** — matches `Ingest_Email.gs` (GAS time-trigger pulls/writes;
+  optional Chat notify via webhook). The webhook never fetches or writes the DB.
+- **Database-as-hub with one input per edge + orthogonal arrows** — eliminates the diagonal crossings that
+  made it read messy; keeps it an Excalidraw process-flow (Oran chose "tidy this", not a drawio rebuild).
+- **Don't trust the export PNG for text** — `excalidraw_export` can't load the font; the file was always fine.
+
+## Working tree
+- Diagram files above are **uncommitted**. Prior `Ingest_Email.gs` edits also still uncommitted (per prior handoff).
+
+> Resume: `/oran-software-engineer` on `product-on-shelf-app` — diagram is current; wire the READ path
+> (`Code.gs doGet` → inject `window.PRICING` from `Price`, Firewall parity first), then the template-fill quotation export.
+
+---
+
+# Handoff — Product on Shelf (cont.)
+_Session: 2026-06-01 evening → 2026-06-02 · software-engineer mode · UI/UX + RBAC_
+
+## Stage
+Read path was already wired (commit `60769a0`, `ReadPath.gs`). This session = **UI/UX polish + a new
+product menu + full RBAC with an admin web editor**. All pushed to Apps Script `@HEAD`. **Only the
+backfill-removal is committed (`152a908`, pushed to GitHub); items 2–8 below are UNCOMMITTED in the working tree.**
+
+## Built this session (branch `product-on-shelf-app`)
+1. **Removed obsolete email-backfill entry points** — `backfillEmailPrices`/`resetBackfill` + orphan
+   `BACKFILL_MONTHS` knob (superseded by discovery). Run dropdown 10→8. **Committed `152a908` + pushed to GitHub.**
+2. **Brand dropdown + Model-only on ALL price lists** (`_pricelist.html` engine + firewall `fwlist.html`):
+   added explicit `brand` to all 81 mock items; Brand select filters Model; hardware strips the brand
+   prefix (model-only), software keeps full names. `ReadPath.gs` now emits `brand` so live prices group too.
+3. **New "Cabling & SFP+" hardware menu** — `panels/cabling.html` (price-list-only), home card, sidebar nav,
+   `DEFAULTS.cabling` (12 items; brands Cisco/Allied Telesis/H3C/Fibre/Copper), `ReadPath` `cabling:'cabling'`,
+   MANIFEST entry. **Accessory mode** (`accessory:true`): device-only quotation, NO MA/SLA/SOW/location/support.
+   Re-mapped **22 transceiver/DAC/optic aliases `switch:*`→`cabling:*`** in `Ingest_Email.gs` (switches/line-cards/
+   modules stay `switch:`).
+4. **Storage + Server/HCI tabs "Refresh"→"Replacement"** (tab labels + home cards + guide line). Internal
+   `data-tab="st-refresh"`/`hci-refresh` keys kept (flow JS unchanged).
+5. **Removed "Phase 1" header badge.**
+6. **RBAC (email login + role)** — `Auth.gs` (NEW): `getUserContext` via `Session.getActiveUser()`,
+   `lookupRole_` reads the **`_RBAC`** tab (schema-flexible col detection), `userContextJson_`. `Code.gs doGet`
+   injects `window.USER`; `build.py` emits the `window.USER` bootstrap; `src/flows/_rbac.html` (NEW) gates the
+   UI by role (admin sees Settings/UI Kit/Users&Roles; everyone else = viewer). `.claspignore` +`!Auth.gs`.
+7. **Admin "Users & Roles" web editor** — `panels/admin.html` + `flows/_admin.html` (NEW): CRUD over `_RBAC`
+   via `google.script.run` → `rbacList`/`rbacSave`/`rbacRemove`, each **guarded by `requireAdmin_()` server-side**.
+   Self-lockout guard (can't remove own row). Sidebar nav "Users & Roles" (admin-gated).
+8. **Job position separated from role** — `position` column in `_RBAC` (auto-detected, or auto-created on first
+   save), separate "Job position" field + table column in the editor. Role = access; position = title.
+
+## Open / Oran's manual steps (Claude can't run GAS / change deployment / write Sheets)
+- 🔴 **Activate RBAC**: Deploy → Manage deployments → **Execute as: Me · Access: anyone at scmtechnologies.co.th**.
+  Required for identity + the admin editor's `google.script.run`. ⚠️ After this only @scm accounts can open the app
+  (not personal gmail). Until done, you show as `viewer`/"not signed in".
+- 🔴 **Confirm `_RBAC`** has an email + role column and your row = `admin` (run `setupRoles()` to seed/confirm).
+  If the editor shows "could not find an email and a role column", paste the `_RBAC` headers for Claude to align detection.
+- 🟡 **Move already-ingested SFP prices into the new menu**: existing live `_alias`/`Price` rows still carry
+  `switch:*` keys (the code re-route only affects FUTURE ingestion). In the DB sheet, find-replace `_alias`
+  `sku_key`: `switch:…sfp/glc/qsfp/at-sp…`→`cabling:…`, then `resetPriceData()` + `discoverAllPriceMail()`.
+- 🟡 Only `admin` is elevated; `editor`/`sales`/`viewer` all = viewer-level UI. Define what each gates when ready.
+- 🟡 Couldn't pixel-verify (this sandbox can't paint the CDN shell headless — even untouched views render blank).
+  Verified via node logic tests + assembled `preview.html` greps + clasp push confirmation. Eyeball the live `/dev` URL.
+
+## Next concrete step
+Decide commit strategy for the uncommitted stack (items 2–8) — one commit or split per feature — then push to
+GitHub. Then Oran does the deployment change + `setupRoles()` to activate RBAC. After that: the template-fill
+quotation export (still pending, pre-existing).
+
+## Suggested skills
+- **`/oran-software-engineer`** — all code work. Verify: `node --check` on extracted `<script>`/`.gs`, the
+  `var DEFAULTS` node logic harness, `python3 build.py --preview` + grep; `tools/push.sh` to ship `@HEAD`;
+  `npx @google/clasp push -f | grep` to confirm a file landed. `.claspignore` is an ALLOWLIST — new `.gs` need `!Name.gs`.
+
+## Artifacts produced this session (paths from `product-on-shelf/`)
+- NEW: `Auth.gs`, `src/flows/_rbac.html`, `src/flows/_admin.html`, `src/panels/admin.html`, `src/panels/cabling.html`.
+- MODIFIED: `Ingest_Email.gs` (backfill removal + SFP→cabling aliases), `ReadPath.gs` (brand + cabling view),
+  `Code.gs` (USER_JSON), `build.py` (USER bootstrap + 3 MANIFEST entries), `.claspignore` (+Auth.gs),
+  `src/flows/_pricelist.html` (brand + model-only + accessory), `src/flows/fwlist.html` (brand),
+  `src/panels/{home,storage,hci,guide,firewall,01_shell_top}.html`, `index.html` (rebuilt).
+- Commit `152a908` (backfill removal) — committed + pushed to GitHub `Oranninhun11/Claude`.
+
+## Decisions (the why)
+- **Explicit `brand` per item** (not first-word derivation) — needed so ws/m365 collapse under "Microsoft"
+  (first-word would split User CAL/Device CAL). Hardware strips brand prefix; software keeps full names ("model only hardware").
+- **`accessory:true` mode** for Cabling — transceivers/cables are device-only buys; MA/SLA/SOW/site-prep are
+  wrong for them (Oran's explicit instruction). Reusable flag; only `cabling` uses it.
+- **Identity = Google Workspace sign-in, role = `_RBAC` tab** — the only sane auth for a GAS web app; real
+  boundary is the domain-restricted deployment. Client gating is cosmetic, so writes are admin-guarded server-side.
+- **Execute as: Me (not user)** — so the server keeps owner rights to read/write the DB sheet for everyone;
+  same-domain `getActiveUser()` still returns the signed-in user. No `appsscript.json` scope change → daily trigger untouched.
+- **Schema-flexible `_RBAC`** (detect cols by header name; auto-add `position`) — Oran built `_RBAC` independently;
+  the cached Drive export didn't include it, so the code adapts rather than hardcoding columns.
+
+## References
+- Seam pattern: `window.PRICING` bootstrap (`build.py` + `Code.gs` + `ReadPath.gs`) — `window.USER` mirrors it.
+- `DB_SCHEMA.md`, `reference_product_on_shelf_deploy.md` (clasp v3, `@HEAD` review loop), live DB `1kzKWvaJN7z7…`.
+
+> Resume: `/oran-software-engineer` on `product-on-shelf-app` — commit the uncommitted UI/UX + RBAC stack
+> (items 2–8) and push to GitHub; Oran activates RBAC via the deployment change + `setupRoles()`. Then the
+> template-fill quotation export.

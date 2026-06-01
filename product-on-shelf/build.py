@@ -34,6 +34,7 @@ MANIFEST = [
     ("panels/home.html",              304, 454),
     ("panels/firewall.html",          455, 599),
     ("panels/switch.html",            600, 755),
+    ("panels/cabling.html",           0,    0),    # added post-split; price-list-only L1 menu
     ("panels/hci.html",               756, 926),
     ("panels/storage.html",           927, 1089),
     ("panels/backup.html",            1090, 1148),
@@ -53,9 +54,12 @@ MANIFEST = [
     ("panels/virt.html",              2103, 2184),
     ("panels/custom.html",            2185, 2224),
     ("panels/uikit.html",             2225, 2286),
+    ("panels/admin.html",             0,    0),    # added post-split; admin Users & Roles (_RBAC) editor
     ("panels/settings.html",          2287, 2305),
     ("02_shell_bottom.html",          2306, 2310),
     ("flows/_core.html",              2311, 2369),
+    ("flows/_rbac.html",              0,    0),    # added post-split; RBAC role-gating, runs after the router
+    ("flows/_admin.html",             0,    0),    # added post-split; admin Users & Roles editor (google.script.run)
     ("flows/_navdrawer.html",         2370, 2393),
     ("flows/_cart.html",              2394, 2572),
     ("flows/_quote.html",             2573, 2660),
@@ -108,6 +112,9 @@ def do_build_index(out_path):
         # Read path: inject window.PRICING server-side, BEFORE the flow scripts run. Code.gs sets the
         # PRICING_JSON template var (ReadPath.gs:posPricingJson_); google.script.run would be too late.
         "<script>window.PRICING = <?!= PRICING_JSON ?>;</script>",
+        # RBAC: inject window.USER = { email, role } from the signed-in user (Auth.gs:userContextJson_).
+        # src/flows/_rbac.html reads it to gate the UI by role.
+        "<script>window.USER = <?!= USER_JSON ?>;</script>",
     ]
     for rel, _a, _b in MANIFEST[1:]:
         lines.append(f"<?!= include('{include_name(rel)}') ?>")

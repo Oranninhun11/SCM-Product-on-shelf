@@ -1,0 +1,46 @@
+  <!-- ===================== RBAC — role-gated UI ===================== -->
+  <script>
+    /**
+     * Email-login RBAC. Identity + role are injected server-side as window.USER = { email, role }
+     * by Code.gs doGet (see Auth.gs), the same seam as window.PRICING. This script only gates the
+     * UI by role — the real security boundary is the Google Workspace domain sign-in on the
+     * deployment (Execute as: Me · Access: anyone at scmtechnologies.co.th). Client gating alone is
+     * cosmetic, so nothing sensitive should rely on it without a server check.
+     *
+     * v1 policy: `admin` sees everything incl. the Workspace tools (UI Kit, Settings). Every other
+     * role — including the default `viewer` for signed-in staff not yet listed in the Roles tab —
+     * gets the estimator without those admin tools. Extend ADMIN_VIEWS / add roles as the sheet grows.
+     */
+    (function () {
+      var U = window.USER || { email: '', role: 'admin' };       // missing (local preview) → admin so dev sees all
+      if (!U.role || U.role === 'anonymous') U.role = 'viewer';  // signed-in-but-unidentified → safe default
+      var isAdmin = U.role === 'admin';
+      document.documentElement.setAttribute('data-role', U.role);
+
+      var ADMIN_VIEWS = { admin: true, settings: true, uikit: true };   // views only admins may open
+
+      if (!isAdmin) {
+        Object.keys(ADMIN_VIEWS).forEach(function (v) {
+          document.querySelectorAll('[data-nav="' + v + '"]').forEach(function (n) { n.style.display = 'none'; });
+        });
+        // Hide the now-empty "Workspace" sidebar section label (UI Kit + Settings were its only items).
+        document.querySelectorAll('.section-label').forEach(function (lbl) {
+          if (/workspace/i.test(lbl.textContent || '')) lbl.style.display = 'none';
+        });
+      }
+
+      // Header chip: signed-in email + role. Sits left of the help (?) button; hidden on small screens.
+      var help = document.querySelector('header [data-nav="guide"]');
+      if (help && help.parentNode) {
+        var chip = document.createElement('div');
+        chip.className = 'mr-1 hidden items-center gap-2 rounded-md border border-border px-2.5 py-1 text-xs sm:inline-flex';
+        chip.title = U.email ? (U.email + ' · ' + U.role) : 'not signed in';
+        chip.innerHTML =
+          '<i data-lucide="user-round" class="h-3.5 w-3.5 text-muted-foreground"></i>' +
+          '<span class="max-w-[16rem] truncate text-foreground">' + (U.email || 'not signed in') + '</span>' +
+          '<span class="badge badge-brand">' + U.role + '</span>';
+        help.parentNode.insertBefore(chip, help);
+        if (window.lucide) lucide.createIcons();
+      }
+    })();
+  </script>

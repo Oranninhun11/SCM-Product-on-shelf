@@ -1,0 +1,108 @@
+  <!-- ===================== Admin — Users & Roles editor (_RBAC) ===================== -->
+  <script>
+    /**
+     * The admin "Users & Roles" view. Reads/writes the `_RBAC` tab via google.script.run →
+     * Auth.gs rbacList/rbacSave/rbacRemove, each guarded by requireAdmin_() on the server (the real
+     * enforcement; this UI is only shown to admins by _rbac.html). google.script.run only exists in
+     * the deployed Apps Script web app, so in local preview this panel shows a notice instead.
+     */
+    (function () {
+      var view = document.querySelector('[data-view="admin"]');
+      if (!view) return;
+      var tableEl  = document.getElementById('adm-table');
+      var statusEl = document.getElementById('adm-status');
+      var emailEl  = document.getElementById('adm-email');
+      var roleEl   = document.getElementById('adm-role');
+      var posEl    = document.getElementById('adm-position');
+      var nameEl   = document.getElementById('adm-name');
+      var saveBtn  = document.getElementById('adm-save');
+      var refreshBtn = document.getElementById('adm-refresh');
+      var hasServer = !!(window.google && window.google.script && google.script.run);
+      var loaded = false;
+
+      function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (ch) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]; }); }
+      function setStatus(msg, kind) {
+        statusEl.textContent = msg || '';
+        statusEl.className = 'mt-2 text-sm ' + (kind === 'err' ? 'text-brand-orange' : 'text-muted-foreground');
+      }
+      function busy(on) { saveBtn.disabled = on; saveBtn.classList.toggle('opacity-60', on); }
+
+      function run(method, arg, onOk) {
+        if (!hasServer) { setStatus('User management runs only in the deployed app (needs Google sign-in), not local preview.', 'err'); return; }
+        busy(true); setStatus('Working…');
+        var r = google.script.run
+          .withSuccessHandler(function (res) { busy(false); onOk(res); })
+          .withFailureHandler(function (err) { busy(false); setStatus((err && err.message) || 'Server error', 'err'); });
+        if (arg === undefined) r[method](); else r[method](arg);
+      }
+
+      function render(data) {
+        if (!data || !data.ok) {
+          tableEl.innerHTML = '';
+          setStatus((data && data.error) || 'Could not load _RBAC.', 'err');
+          return;
+        }
+        var rowsHtml = data.users.map(function (u) {
+          var roleBadge = '<span class="badge badge-brand">' + esc(u.role) + '</span>';
+          var active = data.hasActive ? (u.active ? 'Yes' : '<span class="text-muted-foreground">No</span>') : '—';
+          return '<tr class="border-t border-border">' +
+            '<td class="py-2 pr-4">' + esc(u.email) + '</td>' +
+            '<td class="py-2 pr-4">' + roleBadge + '</td>' +
+            (data.hasPosition ? '<td class="py-2 pr-4">' + esc(u.position) + '</td>' : '') +
+            (data.hasName ? '<td class="py-2 pr-4">' + esc(u.name) + '</td>' : '') +
+            '<td class="py-2 pr-4 tabular-nums">' + active + '</td>' +
+            '<td class="py-2 text-right whitespace-nowrap">' +
+              '<button class="btn btn-ghost btn-sm" data-edit="' + esc(u.email) + '" data-role="' + esc(u.role) + '" data-position="' + esc(u.position) + '" data-name="' + esc(u.name) + '">Edit</button> ' +
+              '<button class="btn btn-ghost btn-sm text-brand-orange" data-remove="' + esc(u.email) + '">Remove</button>' +
+            '</td></tr>';
+        }).join('');
+        tableEl.innerHTML =
+          '<table class="w-full text-sm"><thead><tr class="text-left text-muted-foreground">' +
+            '<th class="pb-2 pr-4 font-medium">Email</th><th class="pb-2 pr-4 font-medium">Role</th>' +
+            (data.hasPosition ? '<th class="pb-2 pr-4 font-medium">Job position</th>' : '') +
+            (data.hasName ? '<th class="pb-2 pr-4 font-medium">Name</th>' : '') +
+            '<th class="pb-2 pr-4 font-medium">Active</th><th class="pb-2 font-medium text-right">Actions</th>' +
+          '</tr></thead><tbody>' + (rowsHtml || '<tr><td class="py-3 text-muted-foreground" colspan="6">No users yet.</td></tr>') + '</tbody></table>';
+        setStatus(data.users.length + ' user' + (data.users.length === 1 ? '' : 's') + '.');
+      }
+
+      function load() { run('rbacList', undefined, function (res) { loaded = true; render(res); }); }
+
+      saveBtn.addEventListener('click', function () {
+        var rec = { email: (emailEl.value || '').trim(), role: roleEl.value, position: (posEl.value || '').trim(), name: (nameEl.value || '').trim() };
+        if (!rec.email) { setStatus('Enter an email.', 'err'); return; }
+        run('rbacSave', rec, function (res) {
+          render(res); emailEl.value = ''; posEl.value = ''; nameEl.value = ''; roleEl.value = 'viewer';
+          if (res && res.ok) setStatus('Saved ' + rec.email + '.');
+        });
+      });
+
+      refreshBtn.addEventListener('click', load);
+
+      // Edit → fill the form; Remove → confirm then delete (delegated, table is re-rendered).
+      tableEl.addEventListener('click', function (e) {
+        var ed = e.target.closest('[data-edit]');
+        if (ed) {
+          emailEl.value = ed.getAttribute('data-edit');
+          roleEl.value  = ed.getAttribute('data-role') || 'viewer';
+          posEl.value   = ed.getAttribute('data-position') || '';
+          nameEl.value  = ed.getAttribute('data-name') || '';
+          emailEl.focus();
+          return;
+        }
+        var rm = e.target.closest('[data-remove]');
+        if (rm) {
+          var email = rm.getAttribute('data-remove');
+          if (window.confirm('Remove ' + email + ' from _RBAC?')) run('rbacRemove', email, render);
+        }
+      });
+
+      // Lazy-load the first time the admin view is opened (and on startup if it's already visible).
+      document.addEventListener('click', function (e) {
+        var nav = e.target.closest('[data-nav="admin"]');
+        if (nav && !loaded) setTimeout(load, 0);
+      });
+      if (!view.hasAttribute('hidden')) load();
+    })();
+  </script>
