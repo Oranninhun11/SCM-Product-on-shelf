@@ -305,12 +305,13 @@
           return '<div class="grid gap-1.5 sm:col-span-2 lg:col-span-3"><span class="label">Add-ons</span>' +
             '<div class="flex flex-wrap gap-x-6 gap-y-2 pt-1">' + list + '</div></div>';
         }
-        var toggleField = cfg.componentToggles
-          ? '<label class="flex items-center gap-2 self-end pb-2 text-sm">' +
-              '<input type="checkbox" class="h-4 w-4 rounded border-border accent-brand-navy" data-role="impl-on" checked /> Include implementation</label>' +
-            '<label class="flex items-center gap-2 self-end pb-2 text-sm">' +
-              '<input type="checkbox" class="h-4 w-4 rounded border-border accent-brand-navy" data-role="support-on" checked /> Include support</label>'
-          : '';
+        // Implementation + Support are individually toggleable on EVERY hardware price list (default on),
+        // so every product reads the same as firewall/switch. (Software/accessory layouts don't apply.)
+        var toggleField =
+          '<label class="flex items-center gap-2 self-end pb-2 text-sm">' +
+            '<input type="checkbox" class="h-4 w-4 rounded border-border accent-brand-navy" data-role="impl-on" checked /> Include implementation</label>' +
+          '<label class="flex items-center gap-2 self-end pb-2 text-sm">' +
+            '<input type="checkbox" class="h-4 w-4 rounded border-border accent-brand-navy" data-role="support-on" checked /> Include support</label>';
 
         var optionFields;
         if (accessory) {
