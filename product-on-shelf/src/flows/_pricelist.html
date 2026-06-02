@@ -317,10 +317,12 @@
         if (accessory) {
           optionFields = brandField + modelField + qtyField;
         } else if (isSw) {
+          // Software: same Implementation/Support toggles as hardware, but NO site prep / SLA / RMA.
           optionFields = brandField + modelField + qtyField +
             (sub ? field('Term', selectHtml('term', TERM_OPTS)) : '') +
             field('SOW scope (onboarding)', selectHtml('sow', sowSelect)) +
-            field('Location', selectHtml('loc', LOC_OPTS));
+            field('Location', selectHtml('loc', LOC_OPTS)) +
+            toggleField;
         } else {
           // cfg-tier / cfg-addons are display:contents wrappers refilled per selected model (bundle-aware).
           optionFields = brandField + modelField + qtyField +
@@ -366,14 +368,16 @@
             descMeta = it.model + ' · ' + qty + ' ' + (qty > 1 ? 'units' : 'unit');
           } else if (isSw) {
             var sow = q('sow').value, loc = q('loc').value;
-            var impl = implFor(key)[sow] * LOC_MULT[loc];
+            var implOn = q('impl-on') ? q('impl-on').checked : true;     // toggle (default on); no site prep for software
+            var supportOn = q('support-on') ? q('support-on').checked : true;
+            var impl = implOn ? implFor(key)[sow] * LOC_MULT[loc] : 0;
             var years = sub ? parseInt(q('term').value, 10) : 1;
             var license = it.price * qty * years;
             total = round1k((license + impl) * BUFFER);
             rows = row('License (' + qty + ' × ' + thb(it.price) + ')', thb(license)) +
                    (sub ? row('Term', years + ' yr') : row('License type', 'Perpetual')) +
-                   row('Onboarding', thb(impl)) +
-                   row('Support', sub ? 'Included in subscription' : 'Included (warranty)');
+                   row('Implementation', implOn ? thb(impl) : '—') +
+                   row('Support', supportOn ? (sub ? 'Included in subscription' : 'Included (warranty)') : '—');
             descMeta = it.model + ' · ' + qty + (sub ? ' × ' + years + ' yr' : '');
           } else {
             var sow = q('sow').value, loc = q('loc').value;
