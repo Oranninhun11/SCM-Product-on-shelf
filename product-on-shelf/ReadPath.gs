@@ -18,6 +18,7 @@
 // data-pricelist view key used by the product panels. Categories absent here have no price-list
 // view yet, so their rows are skipped (the panel falls back to its mock list).
 var POS_CATEGORY_TO_VIEW = {
+  firewall: 'firewall',
   switch: 'switch', server: 'server', storage: 'storage', router: 'router', adc: 'adc',
   ups: 'ups', wireless: 'wireless', hci: 'hci', cabling: 'cabling',
   backup: 'backup', nac: 'nac', endpoint: 'endpoint', dlp: 'dlp', captive: 'captive',

@@ -29,6 +29,11 @@
       var BUFFER    = (P.knobs && P.knobs.buffer != null) ? P.knobs.buffer : 1.20;
       var SLA_LABEL = { nbd: 'NBD', '8x5x4': '8×5×4', '24x7x4': '24×7×4' };
 
+      // Security subscription (FortiGuard bundle), priced per-device/yr as a fraction of device list — MOCK,
+      // window.PRICING.firewall.tier_rate fills it from the Sheet. ATP < UTP < Enterprise (superset).
+      var TIER_RATE  = PF.tier_rate || { atp: 0.28, utp: 0.35, ent: 0.50 };
+      var TIER_LABEL = { atp: 'ATP Bundle', utp: 'UTP Bundle', ent: 'Enterprise Bundle' };
+
       var thb     = function (n) { return '฿' + Math.round(n).toLocaleString('en-US'); };
       var round1k = function (n) { return Math.round(n / 1000) * 1000; };
       var el      = function (id) { return document.getElementById(id); };
@@ -51,21 +56,25 @@
         return {
           units:    Math.max(1, parseInt(el('fwl-units').value, 10) || 1),
           years:    parseInt(el('fwl-years').value, 10),
+          tier:     el('fwl-tier').value,
           sla:      el('fwl-sla').value,
           sow:      el('fwl-sow').value,
           location: el('fwl-location').value,
           adv:      el('fwl-adv').checked,
-          site:     el('fwl-site').checked
+          site:     el('fwl-site').checked,
+          impl:     el('fwl-impl').checked,
+          support:  el('fwl-support').checked
         };
       }
 
+      // Each component is its own amount; render() folds in the checked add-ons and applies the buffer.
       function price(s, inp) {
-        var device   = s.price * inp.units;                                     // only the device scales with qty
-        var sitePrep = inp.site ? SITE_PREP : 0;                                // flat per project
-        var impl     = IMPL_BASE[inp.sow] * LOC_MULT[inp.location];             // project-level
-        var support  = s.lic * inp.years * SLA_MULT[inp.sla] * (inp.adv ? ADV_MULT : 1);
-        var subtotal = device + sitePrep + impl + support;
-        return { device: device, sitePrep: sitePrep, impl: impl, support: support, total: round1k(subtotal * BUFFER) };
+        var device   = s.price * inp.units;                                          // device scales with qty
+        var sub      = s.price * (TIER_RATE[inp.tier] || 0) * inp.units * inp.years;  // FortiGuard subscription, per device/yr
+        var sitePrep = inp.site ? SITE_PREP : 0;                                     // flat per project
+        var impl     = inp.impl ? IMPL_BASE[inp.sow] * LOC_MULT[inp.location] : 0;   // project-level, toggleable
+        var support  = inp.support ? s.lic * inp.years * SLA_MULT[inp.sla] * (inp.adv ? ADV_MULT : 1) : 0; // FortiCare, toggleable
+        return { device: device, sub: sub, sitePrep: sitePrep, impl: impl, support: support };
       }
 
       function row(label, value) {
@@ -76,6 +85,16 @@
       function render() {
         var s = chosen(), inp = readInputs(), r = price(s, inp);
         var brand = brandOf(s), slug = slugify(brand);
+
+        // Add-ons — each ticked add-on (FortiAnalyzer / FortiManager) is its own flat line.
+        var addonRows = '', addonTotal = 0;
+        document.querySelectorAll('[data-fwl-addon]').forEach(function (cb) {
+          if (cb.checked) { var ap = Number(cb.getAttribute('data-addon-price')) || 0; addonTotal += ap; addonRows += row(cb.getAttribute('data-addon-name'), thb(ap)); }
+        });
+
+        var subtotal = r.device + r.sub + r.sitePrep + r.impl + r.support + addonTotal;
+        var total = round1k(subtotal * BUFFER);
+
         sumEl.innerHTML =
           '<div class="card flex flex-col" data-family="' + slug + '">' +
             '<div class="card-header">' +
@@ -87,14 +106,16 @@
             '</div>' +
             '<div class="card-content flex-1 space-y-1.5 text-sm">' +
               row('Device (' + inp.units + ' × ' + thb(s.price) + ')', thb(r.device)) +
+              row('Security subscription · ' + TIER_LABEL[inp.tier] + ' · ' + inp.years + ' yr', thb(r.sub)) +
+              addonRows +
               row('Site prep', inp.site ? thb(r.sitePrep) : '—') +
-              row('Implementation', thb(r.impl)) +
-              row('Support · ' + inp.years + ' yr · ' + SLA_LABEL[inp.sla] + (inp.adv ? ' · Adv. RMA' : ''), thb(r.support)) +
+              row('Implementation', inp.impl ? thb(r.impl) : '—') +
+              row('Support · ' + inp.years + ' yr · ' + SLA_LABEL[inp.sla] + (inp.adv ? ' · Adv. RMA' : ''), inp.support ? thb(r.support) : '—') +
             '</div>' +
             '<div class="mt-auto flex flex-col gap-3 border-t border-border p-6 pt-4">' +
               '<div class="flex items-baseline justify-between">' +
                 '<span class="text-sm text-muted-foreground">Est. total</span>' +
-                '<span class="text-xl font-semibold text-brand-navy tabular-nums">' + thb(r.total) + '</span>' +
+                '<span class="text-xl font-semibold text-brand-navy tabular-nums">' + thb(total) + '</span>' +
               '</div>' +
               '<button class="btn btn-primary w-full" data-select="' + slug + '">Add to estimate</button>' +
             '</div>' +
@@ -117,7 +138,7 @@
           }).join('');
         }
         populateModels(brandEl ? brandEl.value : brands[0]);
-        var nodes = document.querySelectorAll('#fwl-model, #fwl-units, #fwl-years, #fwl-sla, #fwl-sow, #fwl-location, #fwl-adv, #fwl-site');
+        var nodes = document.querySelectorAll('#fwl-model, #fwl-tier, #fwl-units, #fwl-years, #fwl-sla, #fwl-sow, #fwl-location, #fwl-adv, #fwl-site, #fwl-impl, #fwl-support, [data-fwl-addon]');
         ['input', 'change'].forEach(function (evt) {
           nodes.forEach(function (n) { n.addEventListener(evt, render); });
         });

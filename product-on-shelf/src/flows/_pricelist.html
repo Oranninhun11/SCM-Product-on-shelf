@@ -65,12 +65,87 @@
       var SW_SOW = { basic: 'Basic — onboarding',            standard: 'Standard — config + integration', complex: 'Complex — full rollout + integration' };
 
       var DEFAULTS = {
+        // ---- Firewall: curated bundle catalog (FortiGate appliance + FortiGuard tier + FortiCare + add-ons) ----
+        // Same shape as switch: the Model dropdown lists configured firewalls; FortiGuard bundle (UTP/ATP/
+        // Enterprise) is the subscription tier (INCLUDED in the bundle), FortiCare is the support line, and
+        // FortiAnalyzer/FortiManager are optional add-ons. Prices MOCK; window.PRICING.firewall.pricelist
+        // (ingested xlsx quotes) feeds component costs by part# once ReadPath maps the `firewall` category.
+        firewall: { label: 'Firewall', icon: 'shield', qtyLabel: 'Units', subscription: false,
+          componentToggles: true, bundleCatalog: true, items: [
+          { brand: 'Fortinet', model: 'Fortinet FortiGate 90G (FG-90G)', price: 91000, unit: 'configured', components: [
+            { part: 'FG-90G',                desc: 'FortiGate 90G next-gen firewall appliance',        price: 91000,  role: 'device' },
+            { part: 'FC-10-F090G-950-02-DD', desc: 'FortiGuard UTP Bundle (ATP + web/DNS/app)',         price: 32000,  role: 'dna', id: 'utp', name: 'UTP Bundle', perYear: true },
+            { part: 'FC-10-F090G-928-02-DD', desc: 'FortiGuard ATP Bundle (IPS, AV, sandbox)',          price: 26000,  role: 'dna', id: 'atp', name: 'ATP Bundle', perYear: true },
+            { part: 'FC-10-F090G-809-02-DD', desc: 'FortiGuard Enterprise Bundle (UTP + casb/ot/sd-wan)',price: 48000, role: 'dna', id: 'ent', name: 'Enterprise Bundle', perYear: true },
+            { part: 'FC-10-F090G-247-02-DD', desc: 'FortiCare Premium 24×7 support',                     price: 12000,  role: 'support', perYear: true },
+            { part: 'FAZ-150G',              desc: 'FortiAnalyzer 150G — logging & analytics appliance', price: 180000, role: 'addon', name: 'FortiAnalyzer (FAZ-150G)', on: false },
+            { part: 'FMG-200G',              desc: 'FortiManager 200G — central management appliance',   price: 220000, role: 'addon', name: 'FortiManager (FMG-200G)', on: false } ] },
+          { brand: 'Fortinet', model: 'Fortinet FortiGate 120G (FG-120G)', price: 121000, unit: 'configured', components: [
+            { part: 'FG-120G',               desc: 'FortiGate 120G next-gen firewall appliance',         price: 121000, role: 'device' },
+            { part: 'FC-10-F120G-950-02-DD', desc: 'FortiGuard UTP Bundle (ATP + web/DNS/app)',         price: 42000,  role: 'dna', id: 'utp', name: 'UTP Bundle', perYear: true },
+            { part: 'FC-10-F120G-928-02-DD', desc: 'FortiGuard ATP Bundle (IPS, AV, sandbox)',          price: 34000,  role: 'dna', id: 'atp', name: 'ATP Bundle', perYear: true },
+            { part: 'FC-10-F120G-809-02-DD', desc: 'FortiGuard Enterprise Bundle (UTP + casb/ot/sd-wan)',price: 63000, role: 'dna', id: 'ent', name: 'Enterprise Bundle', perYear: true },
+            { part: 'FC-10-F120G-247-02-DD', desc: 'FortiCare Premium 24×7 support',                     price: 16000,  role: 'support', perYear: true },
+            { part: 'FAZ-150G',              desc: 'FortiAnalyzer 150G — logging & analytics appliance', price: 180000, role: 'addon', name: 'FortiAnalyzer (FAZ-150G)', on: false },
+            { part: 'FMG-200G',              desc: 'FortiManager 200G — central management appliance',   price: 220000, role: 'addon', name: 'FortiManager (FMG-200G)', on: false } ] },
+          { brand: 'Fortinet', model: 'Fortinet FortiGate 200G (FG-200G)', price: 201000, unit: 'configured', components: [
+            { part: 'FG-200G',               desc: 'FortiGate 200G next-gen firewall appliance',         price: 201000, role: 'device' },
+            { part: 'FC-10-F200G-950-02-DD', desc: 'FortiGuard UTP Bundle (ATP + web/DNS/app)',         price: 70000,  role: 'dna', id: 'utp', name: 'UTP Bundle', perYear: true },
+            { part: 'FC-10-F200G-928-02-DD', desc: 'FortiGuard ATP Bundle (IPS, AV, sandbox)',          price: 56000,  role: 'dna', id: 'atp', name: 'ATP Bundle', perYear: true },
+            { part: 'FC-10-F200G-809-02-DD', desc: 'FortiGuard Enterprise Bundle (UTP + casb/ot/sd-wan)',price: 105000,role: 'dna', id: 'ent', name: 'Enterprise Bundle', perYear: true },
+            { part: 'FC-10-F200G-247-02-DD', desc: 'FortiCare Premium 24×7 support',                     price: 26000,  role: 'support', perYear: true },
+            { part: 'FAZ-300G',              desc: 'FortiAnalyzer 300G — logging & analytics appliance', price: 280000, role: 'addon', name: 'FortiAnalyzer (FAZ-300G)', on: false },
+            { part: 'FMG-200G',              desc: 'FortiManager 200G — central management appliance',   price: 220000, role: 'addon', name: 'FortiManager (FMG-200G)', on: false } ] } ] },
         // ---- Hardware: one-time price per unit ----
         router: { label: 'Router / SD-WAN', icon: 'route', qtyLabel: 'Units', subscription: false, items: [
           { brand: 'Fortinet', model: 'FortiGate 40F', price: 22000, unit: 'each' }, { brand: 'Fortinet', model: 'FortiGate 80F', price: 45000, unit: 'each' }, { brand: 'Fortinet', model: 'FortiGate 100F', price: 95000, unit: 'each' },
           { brand: 'Meraki', model: 'Meraki MX68', price: 28000, unit: 'each' }, { brand: 'Meraki', model: 'Meraki MX85', price: 60000, unit: 'each' }, { brand: 'Meraki', model: 'Meraki MX95', price: 120000, unit: 'each' } ] },
-        switch: { label: 'Network Switch', icon: 'network', qtyLabel: 'Units', subscription: false, items: [
-          { brand: 'Cisco', model: 'Cisco C9200L-24P', price: 95000, unit: 'each' }, { brand: 'Cisco', model: 'Cisco C9200L-48P', price: 155000, unit: 'each' },
+        switch: { label: 'Network Switch', icon: 'network', qtyLabel: 'Units', subscription: false,
+          // CURATED BUNDLE CATALOG. The Model dropdown lists configured switches (chassis), NOT raw SKUs.
+          // Each model is a bundle of component SKUs (role-tagged); the headline price is their MERGED sum.
+          //   device  → merged into the one-time Device line     · addon → optional, merges into Device when ticked
+          //   dna     → the subscription tier (pick one)          · support → the support line (per yr)
+          // bundleCatalog=true tells the engine to KEEP this model list and use the ingested
+          // window.PRICING.switch.pricelist only as a part#→price source (component costs), so DNA/PSU/optics/
+          // cables stay INSIDE the bundle instead of appearing as separate models. Mock prices are fallbacks.
+          componentToggles: true, bundleCatalog: true,
+          // Family tiers/add-ons apply to NON-bundle models (e.g. Aruba); bundles derive theirs from components.
+          licenseTiers: { label: 'Network subscription', perYear: true, byBrand: {
+            'Aruba': [ { id: 'foundation', name: 'Central Foundation', price: 3000 }, { id: 'advanced', name: 'Central Advanced', price: 5500 } ] } },
+          addons: [ { id: 'stack', name: 'Stacking module', price: 18000 }, { id: 'psu', name: 'Redundant PSU', price: 12000 } ],
+          items: [
+          { brand: 'Cisco', model: 'Cisco Catalyst 9300 (C9300-24UX-E)', price: 426500, unit: 'configured', components: [
+            { part: 'C9300-24UX-E',       desc: 'Catalyst 9300 24-port mGig and UPOE, Network Essentials', price: 295000, role: 'device' },
+            { part: 'C9300-NW-E-24',      desc: 'C9300 Network Essentials, 24-port license',               price: 0,      role: 'device' },
+            { part: 'SC9300UK9-1718',     desc: 'CAT9300/9400/9500/9600 universal IOS-XE image',           price: 0,      role: 'device' },
+            { part: 'PWR-C1-1100WAC',     desc: '1100W AC 80+ platinum Config 1 power supply',             price: 28000,  role: 'device' },
+            { part: 'CAB-TA-NA',          desc: 'North America AC Type A power cable',                      price: 0,      role: 'device' },
+            { part: 'C9300-SSD-NONE',     desc: 'No SSD card selected',                                     price: 0,      role: 'device' },
+            { part: 'CAB-SPWR-30CM',      desc: 'Catalyst stack power cable 30 CM',                         price: 3500,   role: 'device' },
+            { part: 'C9K-ACC-RBFT',       desc: 'Rubber feet for table-top setup',                          price: 0,      role: 'device' },
+            { part: 'C9K-ACC-SCR-4',      desc: 'Rack-install screws (qty 4)',                              price: 0,      role: 'device' },
+            { part: 'CAB-GUIDE-1RU',      desc: '1RU cable-management guides',                              price: 0,      role: 'device' },
+            { part: 'NETWORK-PNP-LIC',    desc: 'Network Plug-n-Play Connect (zero-touch deploy)',          price: 0,      role: 'device' },
+            { part: 'C9300-NM-8X',        desc: 'Catalyst 9300 8×10GE network module',                     price: 95000,  role: 'addon', name: 'Uplink module — 8×10GE (C9300-NM-8X)', on: true },
+            { part: 'PWR-C1-1100WAC/2',   desc: '1100W AC platinum secondary (redundant) PSU',             price: 28000,  role: 'addon', name: 'Redundant PSU (PWR-C1-1100WAC/2)', on: false },
+            { part: 'STACK-T1-50CM',      desc: 'StackWise-480 stacking cable 50 CM',                      price: 4500,   role: 'addon', name: 'StackWise cable (STACK-T1-50CM)', on: false },
+            { part: 'C9300-DNA-E-24',     desc: 'C9300 DNA Essentials, 24-port term license',              price: 4500,   role: 'dna', id: 'dna-ess', name: 'DNA Essentials', perYear: true },
+            { part: 'C9300-DNA-A-24',     desc: 'C9300 DNA Advantage, 24-port term license',               price: 7800,   role: 'dna', id: 'dna-adv', name: 'DNA Advantage', perYear: true },
+            { part: 'CON-SNTP-C930024U',  desc: 'SNTC 24×7×4 Catalyst 9300 24-port',                       price: 22000,  role: 'support', perYear: true } ] },
+          { brand: 'Cisco', model: 'Cisco Catalyst 9200L (C9200L-24T-4X-E)', price: 150000, unit: 'configured', components: [
+            { part: 'C9200L-24T-4X-E',    desc: 'Catalyst 9200L 24-port data, 4×10G uplinks, Network Essentials', price: 120000, role: 'device' },
+            { part: 'C9200L-NW-E-24',     desc: 'C9200L Network Essentials, 24-port license',              price: 0,      role: 'device' },
+            { part: 'PWR-C1-715WAC',      desc: '715W AC power supply',                                    price: 18000,  role: 'device' },
+            { part: 'CAB-TA-NA',          desc: 'North America AC Type A power cable',                      price: 0,      role: 'device' },
+            { part: 'SFP-10G-SR',         desc: '10GBASE-SR SFP+ uplink optic',                            price: 9000,   role: 'addon', name: 'Uplink optic — 10G-SR (SFP-10G-SR)', on: false },
+            { part: 'CAB-SPWR-30CM',      desc: 'Stack power cable 30 CM',                                  price: 3500,   role: 'addon', name: 'Stack power cable (CAB-SPWR-30CM)', on: false },
+            { part: 'C9200L-DNA-E-24',    desc: 'C9200L DNA Essentials, 24-port term license',             price: 3500,   role: 'dna', id: 'dna-ess', name: 'DNA Essentials', perYear: true },
+            { part: 'CON-SNTP-C920024',   desc: 'SNTC 24×7×4 Catalyst 9200L 24-port',                      price: 14000,  role: 'support', perYear: true } ] },
+          { brand: 'Cisco', model: 'Cisco Catalyst 1300 (C1300-24XTS)', price: 38000, unit: 'configured', components: [
+            { part: 'C1300-24XTS',        desc: 'Catalyst 1300 24-port 10G SFP+ managed switch (license incl.)', price: 38000, role: 'device' },
+            { part: 'SFP-10G-SR',         desc: '10GBASE-SR SFP+ optic',                                   price: 9000,   role: 'addon', name: 'Uplink optic — 10G-SR (SFP-10G-SR)', on: false },
+            { part: 'SFP-H10GB-CU1M',     desc: '10G SFP+ Twinax DAC, 1 m',                                price: 5000,   role: 'addon', name: 'DAC 1 m (SFP-H10GB-CU1M)', on: false },
+            { part: 'SFP-H10GB-CU3M',     desc: '10G SFP+ Twinax DAC, 3 m',                                price: 5500,   role: 'addon', name: 'DAC 3 m (SFP-H10GB-CU3M)', on: false } ] },
           { brand: 'Aruba', model: 'Aruba CX 6300M-24', price: 78000, unit: 'each' }, { brand: 'Aruba', model: 'Aruba CX 6300M-48', price: 135000, unit: 'each' } ] },
         adc: { label: 'Load balancer / ADC', icon: 'scale', qtyLabel: 'Units', subscription: false, items: [
           { brand: 'F5', model: 'F5 BIG-IP r2600', price: 380000, unit: 'each' }, { brand: 'F5', model: 'F5 BIG-IP r4600', price: 650000, unit: 'each' }, { brand: 'F5', model: 'F5 BIG-IP r5600', price: 1100000, unit: 'each' },
@@ -128,8 +203,23 @@
       function cfgFor(key) {
         var ov = P[key] && P[key].pricelist;
         var d = DEFAULTS[key];
+        // Curated bundle catalog (e.g. switch): KEEP the in-code model list; treat the ingested pricelist
+        // purely as a part#→price source. Component costs resolve from it, so DNA/PSU/optics/cables stay
+        // inside their bundle instead of becoming standalone models.
+        if (d && d.bundleCatalog) {
+          var pm = {};
+          if (ov && ov.length) ov.forEach(function (it) {
+            var m = String(it.model || ''), b = String(it.brand || '');
+            var part = (b && m.toUpperCase().indexOf(b.toUpperCase()) === 0) ? m.slice(b.length).trim() : m;
+            if (part) pm[part.toUpperCase()] = it.price;
+          });
+          var cfg = {}; for (var k in d) cfg[k] = d[k];
+          cfg.priceMap = pm;
+          return cfg;
+        }
         if (ov && ov.items) return ov;                                   // full override
-        if (ov && ov.length && d) { return { label: d.label, icon: d.icon, qtyLabel: d.qtyLabel, subscription: d.subscription, sw: d.sw, items: ov }; }
+        if (ov && ov.length && d) { return { label: d.label, icon: d.icon, qtyLabel: d.qtyLabel, subscription: d.subscription, sw: d.sw,
+          componentToggles: d.componentToggles, licenseTiers: d.licenseTiers, addons: d.addons, items: ov }; }
         return d || null;
       }
 
@@ -174,6 +264,54 @@
         var modelField = field('Model', '<select class="select" data-role="model">' + modelOptionsFor(brands[0]) + '</select>');
         var qtyField = field(qtyLabel, '<input type="number" min="1" value="1" class="input" data-role="qty" />');
 
+        // ---- Optional, separately-selectable components (only when the product config provides them) ----
+        // License/subscription tier (brand-aware), add-on checkboxes, and Implementation/Support toggles.
+        // These are gated by cfg fields, so products without them render exactly as before.
+        var lt = cfg.licenseTiers;
+        function tiersForBrand(brand) { return lt ? ((lt.byBrand && lt.byBrand[brand]) || lt.tiers || []) : []; }
+        function licenseOptionsFor(brand) {
+          return tiersForBrand(brand).map(function (t, i) {
+            return '<option value="' + t.id + '"' + (i === 0 ? ' selected' : '') + '>' + t.name + '</option>'; }).join('');
+        }
+        // Configured-bundle models carry their own components; their tier + add-on controls derive from the
+        // model (rebuilt on model change). Plain models fall back to the family-level cfg.
+        function isBundle(it) { return !!(it && it.components && it.components.length); }
+        function compsByRole(it, role) { return (it.components || []).filter(function (c) { return c.role === role; }); }
+        // Component price = ingested price for that part# (bundleCatalog) if present, else the mock fallback.
+        var priceMap = cfg.priceMap || {};
+        function priceOf(part, fallback) { var v = priceMap[String(part || '').toUpperCase()]; return (v != null) ? v : (fallback || 0); }
+        function addonCheckbox(name, price, checked) {
+          return '<label class="flex items-center gap-2 text-sm">' +
+            '<input type="checkbox" class="h-4 w-4 rounded border-border accent-brand-navy" data-role="addon"' + (checked ? ' checked' : '') +
+            ' data-addon-price="' + price + '" data-addon-name="' + String(name).replace(/"/g, '&quot;') + '" /> ' +
+            name + ' (' + thb(price) + ')</label>';
+        }
+        // Inner HTML for the license/subscription tier field (empty string when the model/family has none).
+        function tierInner(it, brand) {
+          var opts;
+          if (isBundle(it)) {
+            opts = compsByRole(it, 'dna').map(function (c, i) { return '<option value="' + c.id + '"' + (i === 0 ? ' selected' : '') + '>' + c.name + '</option>'; }).join('');
+          } else { if (!lt) return ''; opts = licenseOptionsFor(brand); }
+          if (!opts) return '';
+          return '<div class="grid gap-1.5"><label class="label">' + ((lt && lt.label) || 'Subscription') + '</label>' +
+            '<select class="select" data-role="lic-tier">' + opts + '</select></div>';
+        }
+        // Inner HTML for the add-ons block (empty string when none).
+        function addonsInner(it) {
+          var list = isBundle(it)
+            ? compsByRole(it, 'addon').map(function (c) { return addonCheckbox(c.name || c.part, priceOf(c.part, c.price), !!c.on); }).join('')
+            : (cfg.addons || []).map(function (a) { return addonCheckbox(a.name, a.price, false); }).join('');
+          if (!list) return '';
+          return '<div class="grid gap-1.5 sm:col-span-2 lg:col-span-3"><span class="label">Add-ons</span>' +
+            '<div class="flex flex-wrap gap-x-6 gap-y-2 pt-1">' + list + '</div></div>';
+        }
+        var toggleField = cfg.componentToggles
+          ? '<label class="flex items-center gap-2 self-end pb-2 text-sm">' +
+              '<input type="checkbox" class="h-4 w-4 rounded border-border accent-brand-navy" data-role="impl-on" checked /> Include implementation</label>' +
+            '<label class="flex items-center gap-2 self-end pb-2 text-sm">' +
+              '<input type="checkbox" class="h-4 w-4 rounded border-border accent-brand-navy" data-role="support-on" checked /> Include support</label>'
+          : '';
+
         var optionFields;
         if (accessory) {
           optionFields = brandField + modelField + qtyField;
@@ -183,15 +321,19 @@
             field('SOW scope (onboarding)', selectHtml('sow', sowSelect)) +
             field('Location', selectHtml('loc', LOC_OPTS));
         } else {
+          // cfg-tier / cfg-addons are display:contents wrappers refilled per selected model (bundle-aware).
           optionFields = brandField + modelField + qtyField +
+            '<div data-role="cfg-tier" style="display:contents"></div>' +
             field('License / MA term', selectHtml('term', TERM_OPTS)) +
             field('SLA tier', selectHtml('sla', SLA_OPTS)) +
             field('SOW scope (implementation)', selectHtml('sow', sowSelect)) +
             field('Location', selectHtml('loc', LOC_OPTS)) +
+            toggleField +
             '<label class="flex items-center gap-2 self-end pb-2 text-sm">' +
               '<input type="checkbox" class="h-4 w-4 rounded border-border accent-brand-navy" data-role="adv" /> Advanced replacement (RMA)</label>' +
             '<label class="flex items-center gap-2 self-end pb-2 text-sm">' +
-              '<input type="checkbox" class="h-4 w-4 rounded border-border accent-brand-navy" data-role="site" checked /> Include site preparation</label>';
+              '<input type="checkbox" class="h-4 w-4 rounded border-border accent-brand-navy" data-role="site" checked /> Include site preparation</label>' +
+            '<div data-role="cfg-addons" style="display:contents"></div>';
         }
 
         var pickDesc = accessory
@@ -214,7 +356,7 @@
         function render() {
           var it = items[Math.max(0, parseInt(modelEl.value, 10) || 0)];
           var qty = Math.max(1, parseInt(qtyEl.value, 10) || 1);
-          var rows, descMeta, total;
+          var rows, descMeta, total, detailHtml = '';   // detailHtml = read-only SKU BoM expander (bundle models only)
 
           if (accessory) {
             var devOnly = it.price * qty;
@@ -234,19 +376,82 @@
             descMeta = it.model + ' · ' + qty + (sub ? ' × ' + years + ' yr' : '');
           } else {
             var sow = q('sow').value, loc = q('loc').value;
-            var impl = implFor(key)[sow] * LOC_MULT[loc];
             var yrs = parseInt(q('term').value, 10), sla = q('sla').value;
             var adv = q('adv').checked, site = q('site').checked;
-            var lic = Math.round(it.price * SUPP_RATE);                 // annual MA per unit
-            var device = it.price * qty;
+            var implOn = q('impl-on') ? q('impl-on').checked : true;    // toggle when componentToggles; else always on
+            var supportOn = q('support-on') ? q('support-on').checked : true;
+            var bundle = isBundle(it);
+
+            // which add-on checkboxes are ticked right now (keyed by their name)
+            var checkedAddon = {};
+            host.querySelectorAll('[data-role="addon"]').forEach(function (cb) { if (cb.checked) checkedAddon[cb.getAttribute('data-addon-name')] = true; });
+
+            // --- Device: ONE merged line. Bundle = sum(device SKUs) + ticked hardware add-ons; plain = list price.
+            //     Plain-model add-ons stay their own lines (unchanged); bundle add-ons fold into Device + show in detail.
+            var perUnit, addonRows = '', addonTotal = 0, detailComps = [];
+            if (bundle) {
+              perUnit = 0;
+              compsByRole(it, 'device').forEach(function (c) { perUnit += priceOf(c.part, c.price); detailComps.push({ c: c, on: true }); });
+              compsByRole(it, 'addon').forEach(function (c) {
+                var on = !!checkedAddon[c.name || c.part]; if (on) perUnit += priceOf(c.part, c.price); detailComps.push({ c: c, on: on }); });
+            } else {
+              perUnit = it.price;
+              host.querySelectorAll('[data-role="addon"]').forEach(function (cb) {
+                if (cb.checked) { var ap = Number(cb.getAttribute('data-addon-price')) || 0; addonTotal += ap; addonRows += row(cb.getAttribute('data-addon-name'), thb(ap)); } });
+            }
+            var device = perUnit * qty;
+
+            // --- Subscription tier: bundle picks a DNA component; plain uses the family tier list (brand-aware).
+            var subAmt = 0, subRow = '', chosenDna = null;
+            var tierEl = q('lic-tier');
+            if (bundle) {
+              var dnas = compsByRole(it, 'dna');
+              chosenDna = dnas.filter(function (c) { return c.id === (tierEl && tierEl.value); })[0] || dnas[0];
+              if (chosenDna) { var syb = chosenDna.perYear ? yrs : 1; subAmt = priceOf(chosenDna.part, chosenDna.price) * qty * syb;
+                subRow = row('Subscription · ' + chosenDna.name + (chosenDna.perYear ? ' · ' + syb + ' yr' : ''), thb(subAmt)); }
+            } else if (lt) {
+              var brandNow = q('brand') ? q('brand').value : brands[0];
+              var tier = tiersForBrand(brandNow).filter(function (t) { return t.id === (tierEl && tierEl.value); })[0] || tiersForBrand(brandNow)[0];
+              if (tier) { var sy = lt.perYear ? yrs : 1; subAmt = tier.price * qty * sy;
+                subRow = row((lt.label || 'Subscription') + ' · ' + tier.name + (lt.perYear ? ' · ' + sy + ' yr' : ''), thb(subAmt)); }
+            }
+
+            // --- Support: bundle uses the support SKU (e.g. SmartNet); plain ≈ 10% of list per unit/yr.
+            var supComp = bundle ? compsByRole(it, 'support')[0] : null;
+            var supBase = supComp ? priceOf(supComp.part, supComp.price) : Math.round(perUnit * SUPP_RATE);
             var sitePrep = site ? SITE_PREP : 0;
-            var support = lic * qty * yrs * SLA_MULT[sla] * (adv ? ADV_MULT : 1);
-            total = round1k((device + sitePrep + impl + support) * BUFFER);
-            rows = row('Device (' + qty + ' × ' + thb(it.price) + ')', thb(device)) +
+            var impl = implOn ? implFor(key)[sow] * LOC_MULT[loc] : 0;
+            var support = supportOn ? supBase * qty * yrs * SLA_MULT[sla] * (adv ? ADV_MULT : 1) : 0;
+
+            total = round1k((device + subAmt + addonTotal + sitePrep + impl + support) * BUFFER);
+            var devLabel = bundle ? ('Device · ' + it.components[0].part + ' (' + qty + ' × ' + thb(perUnit) + ')')
+                                  : ('Device (' + qty + ' × ' + thb(perUnit) + ')');
+            rows = row(devLabel, thb(device)) +
+                   subRow +
+                   addonRows +
                    row('Site prep', site ? thb(sitePrep) : '—') +
-                   row('Implementation', thb(impl)) +
-                   row('Support · ' + yrs + ' yr · ' + SLA_LABEL[sla] + (adv ? ' · Adv. RMA' : ''), thb(support));
+                   row('Implementation', implOn ? thb(impl) : '—') +
+                   row('Support · ' + yrs + ' yr · ' + SLA_LABEL[sla] + (adv ? ' · Adv. RMA' : ''), supportOn ? thb(support) : '—');
             descMeta = it.model + ' · ' + qty + ' ' + (qty > 1 ? 'units' : 'unit');
+
+            // --- Read-only SKU detail (the merged-into-Device BoM + the subscription/support SKUs) ---
+            if (bundle) {
+              var lines = detailComps.map(function (d) { return { part: d.c.part, desc: d.c.desc, price: priceOf(d.c.part, d.c.price), on: d.on }; });
+              if (chosenDna) lines.push({ part: chosenDna.part, desc: chosenDna.desc, price: priceOf(chosenDna.part, chosenDna.price), on: true });
+              if (supComp) lines.push({ part: supComp.part, desc: supComp.desc, price: priceOf(supComp.part, supComp.price), on: supportOn });
+              var nOn = lines.filter(function (l) { return l.on; }).length;
+              detailHtml =
+                '<div class="border-t border-border px-6 py-3 text-sm">' +
+                  '<button type="button" class="flex w-full items-center justify-between text-muted-foreground hover:text-foreground" data-role="bom-toggle" aria-label="Toggle SKU detail">' +
+                    '<span>View SKU detail · ' + nOn + ' lines</span><i data-lucide="chevron-down" class="h-4 w-4"></i></button>' +
+                  '<div class="mt-2 hidden space-y-1" data-role="bom-detail">' +
+                    lines.map(function (l) {
+                      return '<div class="flex items-baseline justify-between gap-3' + (l.on ? '' : ' opacity-40 line-through') + '">' +
+                        '<span class="font-mono text-xs">' + l.part + '</span>' +
+                        '<span class="flex-1 px-2 text-xs text-muted-foreground">' + l.desc + '</span>' +
+                        '<span class="tabular-nums text-xs">' + (l.price ? thb(l.price) : 'incl.') + '</span></div>'; }).join('') +
+                  '</div></div>';
+            }
           }
 
           sumEl.innerHTML =
@@ -256,6 +461,7 @@
                 '<div class="card-title">' + cfg.label + '</div></div>' +
                 '<div class="card-desc pt-0.5">' + descMeta + '</div></div>' +
               '<div class="card-content flex-1 space-y-1.5 text-sm">' + rows + '</div>' +
+              detailHtml +
               '<div class="mt-auto flex flex-col gap-3 border-t border-border p-6 pt-4">' +
                 '<div class="flex items-baseline justify-between"><span class="text-sm text-muted-foreground">Est. total</span>' +
                   '<span class="text-xl font-semibold text-brand-navy tabular-nums">' + thb(total) + '</span></div>' +
@@ -264,16 +470,37 @@
           if (window.lucide) lucide.createIcons();
         }
 
-        var brandEl = q('brand');
-        host.querySelectorAll('[data-role]').forEach(function (n) {
-          var r = n.getAttribute('data-role');
-          if (r === 'summary' || r === 'brand') return;
-          ['input', 'change'].forEach(function (ev) { n.addEventListener(ev, render); });
+        // Refill the per-model tier + add-on controls for the current model/brand (bundle-aware).
+        function syncModelConfig() {
+          var it = items[Math.max(0, parseInt(modelEl.value, 10) || 0)];
+          var brand = q('brand') ? q('brand').value : brands[0];
+          var tEl = q('cfg-tier'), aEl = q('cfg-addons');
+          if (tEl) tEl.innerHTML = tierInner(it, brand);
+          if (aEl) aEl.innerHTML = addonsInner(it);
+        }
+
+        // Delegated change/input — covers controls injected dynamically by syncModelConfig.
+        ['input', 'change'].forEach(function (ev) {
+          host.addEventListener(ev, function (e) {
+            var r = e.target && e.target.getAttribute ? e.target.getAttribute('data-role') : null;
+            if (r === 'summary' || r === 'cfg-tier' || r === 'cfg-addons') return;
+            if (r === 'brand') { modelEl.innerHTML = modelOptionsFor(e.target.value); syncModelConfig(); render(); return; }
+            if (r === 'model') { syncModelConfig(); render(); return; }
+            render();
+          });
         });
-        if (brandEl) brandEl.addEventListener('change', function () {
-          modelEl.innerHTML = modelOptionsFor(brandEl.value);   // refill Model for the chosen brand
-          render();
+
+        // BoM detail expander (delegated; the summary card is rebuilt on every render).
+        host.addEventListener('click', function (e) {
+          var t = e.target.closest ? e.target.closest('[data-role="bom-toggle"]') : null;
+          if (!t) return;
+          var d = t.parentElement.querySelector('[data-role="bom-detail"]');
+          if (!d) return;
+          var open = d.classList.toggle('hidden') === false;
+          var ic = t.querySelector('svg, i'); if (ic) ic.style.transform = open ? 'rotate(180deg)' : '';
         });
+
+        syncModelConfig();
         render();
       }
 
