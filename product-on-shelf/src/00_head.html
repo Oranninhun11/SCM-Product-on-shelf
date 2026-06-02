@@ -137,4 +137,12 @@
       .tab.active { @apply bg-background text-foreground shadow-sm; }
     }
   </style>
+  <style>
+    /* Role capability gating (set in src/flows/_rbac.html). Estimate + download actions are hidden
+       unless the signed-in role grants them (admin / sales). Deny-by-default: viewers — and any
+       other role — are read-only (can browse price lists, can't add to estimate or download). */
+    html:not([data-can-estimate]) [data-select],
+    html:not([data-can-estimate]) #est-quote,
+    html:not([data-can-estimate]) [data-nav="custom"] { display: none !important; }
+  </style>
 </head>

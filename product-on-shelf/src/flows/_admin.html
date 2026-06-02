@@ -15,6 +15,7 @@
       var roleEl   = document.getElementById('adm-role');
       var posEl    = document.getElementById('adm-position');
       var nameEl   = document.getElementById('adm-name');
+      var pwEl     = document.getElementById('adm-password');
       var saveBtn  = document.getElementById('adm-save');
       var refreshBtn = document.getElementById('adm-refresh');
       var pendingEl    = document.getElementById('adm-pending');
@@ -22,7 +23,8 @@
       var pendingCount = document.getElementById('adm-pending-count');
       var hasServer = !!(window.google && window.google.script && google.script.run);
       var loaded = false;
-      var ROLE_OPTS = ['viewer', 'sales', 'editor', 'admin'];   // roles an admin can approve into
+      var lastUsers = [];                                  // last loaded users, for the duplicate-email guard
+      var ROLE_OPTS = ['viewer', 'sales', 'admin'];   // roles an admin can approve into (viewer=read-only, sales=estimate+download, admin=full)
 
       function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (ch) {
         return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]; }); }
@@ -33,12 +35,14 @@
       function busy(on) { saveBtn.disabled = on; saveBtn.classList.toggle('opacity-60', on); }
 
       function run(method, arg, onOk) {
-        if (!hasServer) { setStatus('User management runs only in the deployed app (needs Google sign-in), not local preview.', 'err'); return; }
+        if (!hasServer) { setStatus('User management runs only in the deployed app, not local preview.', 'err'); return; }
+        var token = window.POS_TOKEN || '';                 // every admin call is guarded by this session token (Auth.gs)
+        if (!token) { setStatus('Please log in as an admin.', 'err'); return; }
         busy(true); setStatus('Working…');
         var r = google.script.run
           .withSuccessHandler(function (res) { busy(false); onOk(res); })
           .withFailureHandler(function (err) { busy(false); setStatus((err && err.message) || 'Server error', 'err'); });
-        if (arg === undefined) r[method](); else r[method](arg);
+        if (arg === undefined) r[method](token); else r[method](token, arg);
       }
 
       // Notification badge on the "Users & Roles" sidebar nav item — pending count, visible app-wide.
@@ -84,6 +88,7 @@
           setStatus((data && data.error) || 'Could not load _RBAC.', 'err');
           return;
         }
+        lastUsers = data.users || [];
         var pending = data.users.filter(function (u) { return String(u.role).toLowerCase() === 'pending'; });
         var active  = data.users.filter(function (u) { return String(u.role).toLowerCase() !== 'pending'; });
         renderPending(pending);
@@ -115,9 +120,14 @@
 
       saveBtn.addEventListener('click', function () {
         var rec = { email: (emailEl.value || '').trim(), role: roleEl.value, position: (posEl.value || '').trim(), name: (nameEl.value || '').trim() };
+        var pw = pwEl ? (pwEl.value || '') : '';
+        if (pw) rec.password = pw;                          // optional: set / reset this user's login password
         if (!rec.email) { setStatus('Enter an email.', 'err'); return; }
+        // Duplicate guard: warn before overwriting an existing user (the form updates, never duplicates).
+        var dupe = lastUsers.filter(function (u) { return String(u.email).toLowerCase() === rec.email.toLowerCase(); })[0];
+        if (dupe && !window.confirm(rec.email + ' already exists (role: ' + dupe.role + '). Update that user?')) { setStatus('Cancelled — no changes.'); return; }
         run('rbacSave', rec, function (res) {
-          render(res); emailEl.value = ''; posEl.value = ''; nameEl.value = ''; roleEl.value = 'viewer';
+          render(res); emailEl.value = ''; posEl.value = ''; nameEl.value = ''; roleEl.value = 'viewer'; if (pwEl) pwEl.value = '';
           if (res && res.ok) setStatus('Saved ' + rec.email + '.');
         });
       });
@@ -166,8 +176,11 @@
         var nav = e.target.closest('[data-nav="admin"]');
         if (nav && !loaded) setTimeout(load, 0);
       });
-      // Admins: load once on startup so the pending-request count badge shows on the nav app-wide.
-      var amAdmin = String((window.USER && window.USER.role) || '').toLowerCase() === 'admin';
-      if (!view.hasAttribute('hidden') || (hasServer && amAdmin)) load();
+      // When an admin logs in (auth resolves async in _rbac.html), load once so the pending-request
+      // count badge shows on the nav app-wide.
+      document.addEventListener('pos:authed', function (e) {
+        if (e.detail && String(e.detail.role).toLowerCase() === 'admin' && !loaded) load();
+      });
+      if (!view.hasAttribute('hidden') && window.POS_TOKEN) load();
     })();
   </script>

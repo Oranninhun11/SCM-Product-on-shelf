@@ -1,166 +1,295 @@
-  <!-- ===================== RBAC — role-gated UI + login/register gate ===================== -->
+  <!-- ===================== Auth — email/password login, register, session ===================== -->
   <script>
     /**
-     * Email-login RBAC. Identity + role are injected server-side as
-     * window.USER = { email, role, name, position } by Code.gs doGet (see Auth.gs), the same seam
-     * as window.PRICING. The real security boundary is the Google Workspace domain sign-in on the
-     * deployment (Execute as: Me · Access: anyone at scmtechnologies.co.th); this client gating is
-     * cosmetic, and every sensitive write is re-checked server-side (requireAdmin_).
+     * Custom email + password auth (see Auth.gs), behind the @scm Google sign-in gate.
      *
-     * Access states (role):
-     *   admin                     → full app incl. Workspace tools (UI Kit, Settings, Users & Roles)
-     *   editor / sales / viewer   → the estimator, without the admin tools
-     *   pending                   → registered, awaiting admin approval → blocked by an overlay
-     *   unregistered / anonymous  → signed in but no _RBAC row → register overlay (Name / Job position)
+     * Flow: on load, validate any saved session token (localStorage) → into the app, else show the
+     * LOGIN screen (Email + Password + a Register button). Login mints a token we store and re-send
+     * on every privileged call. Register files a 'pending' account an admin approves. Sign out clears
+     * the token and returns to login. We never prefill or expose any identity — fields start blank.
      *
-     * Login = Google sign-in (the deployment). Register = registerSelf() files a PENDING request the
-     * admin approves in Users & Roles. Until approved, the overlay covers the app.
+     * Real security is server-side: validateSession / requireAdmin_ in Auth.gs. This script is the UI.
+     * Local preview (no google.script.run) skips auth and runs as admin so the app is visible.
      */
     (function () {
-      var U = window.USER || { email: '', role: 'admin' };       // missing (local preview) → admin so dev sees all
-      var role = String(U.role || 'admin').toLowerCase();
-      var isAdmin   = role === 'admin';
-      var needRegister = role === 'unregistered' || role === 'anonymous';
-      var needApproval = role === 'pending';
-      document.documentElement.setAttribute('data-role', role);
+      var hasServer = !!(window.google && window.google.script && google.script.run);
+      var TOKEN_KEY = 'pos_session';
+      var U = null;                       // logged-in user context, once authenticated
+      var resetEmail = '';                // email carried from "forgot" → "reset" step
+      var flash = '';                     // one-shot message to show on the next login screen
+      var LOGIN_DOMAIN = '@scmtechnologies.co.th';   // login/forgot take the username only; this is appended
 
-      // --- Blocked states: cover the app with a login/register or awaiting-approval overlay --------
-      if (needRegister || needApproval) {
-        buildGate(needApproval ? 'pending' : 'register');
-        return;   // don't bother wiring the (hidden) app chrome — the overlay owns the screen
+      if (!hasServer) {                   // local preview → act as admin, no auth gate
+        U = { email: 'dev@local', role: 'admin', name: 'Dev (preview)' };
+        window.POS_USER = U; window.POS_TOKEN = '';
+        applyRole('admin'); wireUserMenu();
+        return;
       }
 
-      // --- Approved: gate admin-only nav + render the signed-in chip ------------------------------
-      var ADMIN_VIEWS = { admin: true, settings: true, uikit: true };   // views only admins may open
-      if (!isAdmin) {
-        Object.keys(ADMIN_VIEWS).forEach(function (v) {
-          document.querySelectorAll('[data-nav="' + v + '"]').forEach(function (n) { n.style.display = 'none'; });
-        });
-        document.querySelectorAll('.section-label').forEach(function (lbl) {
-          if (/workspace/i.test(lbl.textContent || '')) lbl.style.display = 'none';
-        });
+      // Deployed: resume a saved session, else login.
+      showGate('loading');
+      var saved = '';
+      try { saved = localStorage.getItem(TOKEN_KEY) || ''; } catch (e) {}
+      if (saved) {
+        google.script.run
+          .withSuccessHandler(function (user) { if (user) onAuthed(saved, user); else { clearToken(); showGate('login'); } })
+          .withFailureHandler(function () { showGate('login'); })
+          .validateSession(saved);
+      } else {
+        showGate('login');
       }
 
-      // Populate the header user menu (shell markup) with the signed-in identity + role, and wire
-      // the dropdown + Sign out. "Logout" in an Apps Script web app means signing out of the Google
-      // session the app trusts — there is no separate per-app login — so it points at Google logout.
-      (function () {
+      // --- Auth state transitions -----------------------------------------------------------------
+      function onAuthed(token, user) {
+        U = user; window.POS_USER = user; window.POS_TOKEN = token;
+        applyRole(user.role); wireUserMenu(); removeGate();
+        try { document.dispatchEvent(new CustomEvent('pos:authed', { detail: user })); } catch (e) {}
+      }
+      function clearToken() { try { localStorage.removeItem(TOKEN_KEY); } catch (e) {} window.POS_TOKEN = ''; window.POS_USER = null; }
+      function saveToken(t) { try { localStorage.setItem(TOKEN_KEY, t); } catch (e) {} }
+      function removeGate() { var g = document.getElementById('rbac-gate'); if (g) g.remove(); }
+
+      // Hide admin-only nav for non-admins, and grant estimate/download capability to admin + sales.
+      // (viewer = read-only: the CSS in 00_head.html hides actions unless data-can-estimate is set.)
+      function applyRole(role) {
+        var el = document.documentElement;
+        el.setAttribute('data-role', role);
+        if (role === 'admin' || role === 'sales') el.setAttribute('data-can-estimate', '1');
+        else el.removeAttribute('data-can-estimate');
+        var ADMIN_VIEWS = { admin: true, settings: true, uikit: true };
+        if (role !== 'admin') {
+          Object.keys(ADMIN_VIEWS).forEach(function (v) {
+            document.querySelectorAll('[data-nav="' + v + '"]').forEach(function (n) { n.style.display = 'none'; });
+          });
+          document.querySelectorAll('.section-label').forEach(function (lbl) {
+            if (/workspace/i.test(lbl.textContent || '')) lbl.style.display = 'none';
+          });
+        }
+      }
+
+      // --- Header user menu: identity + Sign out --------------------------------------------------
+      function wireUserMenu() {
         var btn  = document.getElementById('user-menu-btn');
         var menu = document.getElementById('user-menu');
-        var nameEl = document.getElementById('user-menu-name');
-        var roleEl = document.getElementById('user-menu-role');
-        var fullEl = document.getElementById('user-menu-fullname');
-        var mailEl = document.getElementById('user-menu-email');
-        if (nameEl) nameEl.textContent = U.name || U.email || 'Account';
-        if (roleEl) roleEl.textContent = role;
-        if (fullEl) fullEl.textContent = U.name || (U.email ? 'Signed in' : 'Not signed in');
-        if (mailEl) mailEl.textContent = U.email || '';
+        set('user-menu-name', U.name || U.email || 'Account');
+        set('user-menu-role', U.role || '');
+        set('user-menu-fullname', U.name || (U.email ? 'Signed in' : 'Not signed in'));
+        set('user-menu-email', U.email || '');
+        function set(id, txt) { var el = document.getElementById(id); if (el) el.textContent = txt; }
+        function close() { if (menu) menu.classList.add('hidden'); if (btn) btn.setAttribute('aria-expanded', 'false'); }
         if (btn && menu) {
           btn.addEventListener('click', function (e) {
             e.stopPropagation();
             var willOpen = menu.classList.contains('hidden');
-            menu.classList.toggle('hidden');
-            btn.setAttribute('aria-expanded', String(willOpen));
+            menu.classList.toggle('hidden'); btn.setAttribute('aria-expanded', String(willOpen));
           });
           document.addEventListener('click', function (e) {
-            if (menu.classList.contains('hidden')) return;
-            if (!menu.contains(e.target) && !btn.contains(e.target)) {
-              menu.classList.add('hidden'); btn.setAttribute('aria-expanded', 'false');
-            }
+            if (!menu.classList.contains('hidden') && !menu.contains(e.target) && !btn.contains(e.target)) close();
           });
-          document.addEventListener('keydown', function (e) {
-            if (e.key === 'Escape') { menu.classList.add('hidden'); btn.setAttribute('aria-expanded', 'false'); }
-          });
+          document.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
         }
         var signout = document.getElementById('user-menu-signout');
         if (signout) signout.addEventListener('click', function (e) {
-          e.preventDefault();
-          if (window.confirm('Sign out of your Google account for this browser?')) {
-            window.location.href = 'https://accounts.google.com/Logout';
-          }
+          e.preventDefault(); close();
+          var tok = window.POS_TOKEN;
+          if (hasServer && tok) { try { google.script.run.logout(tok); } catch (x) {} }
+          clearToken(); U = null;
+          showGate('login');
         });
-        if (window.lucide) lucide.createIcons();
-      })();
+      }
 
-      // --- Helpers --------------------------------------------------------------------------------
-      function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (ch) {
-        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]; }); }
+      // --- The auth overlay (loading / login / register / pending) --------------------------------
+      function showGate(mode) {
+        removeGate();
+        // Fields start blank on purpose — we never prefill (or expose) anyone's identity.
+        var inner;
+        if (mode === 'loading') {
+          inner = '<div class="card-content flex flex-col items-center gap-3 py-12 text-center">' +
+            '<i data-lucide="loader-circle" class="h-6 w-6 animate-spin text-muted-foreground"></i>' +
+            '<div class="text-sm text-muted-foreground">Checking your session…</div></div>';
+        } else if (mode === 'login') {
+          inner =
+            brandHeader('Product on Shelf', 'Sign in to get instant ballpark pricing for presale & sales.') +
+            '<div class="card-content grid gap-4">' +
+              userField('login-user', 'Username', '') +
+              fieldInput('login-pw', 'Password', 'password', '••••••••', '') +
+              '<button id="rbac-login" class="btn btn-primary w-full">Log in</button>' +
+              '<button id="rbac-goforgot" class="btn btn-ghost btn-sm w-full text-muted-foreground">Forgot password?</button>' +
+              statusDiv() +
+              '<div class="my-1 h-px bg-border"></div>' +
+              '<div class="text-center text-sm text-muted-foreground">New here?</div>' +
+              '<button id="rbac-goregister" class="btn btn-outline w-full">Register</button>' +
+            '</div>';
+        } else if (mode === 'register') {
+          inner =
+            gateHeader('user-plus', 'Request access', 'Create your account',
+              'Register with your details. An admin approves your account and sets your role before you can sign in.') +
+            '<div class="card-content grid gap-4">' +
+              fieldInput('reg-name', 'Name', 'text', 'Your full name', '') +
+              fieldInput('reg-email', 'Email', 'email', 'name@scmtechnologies.co.th', '') +
+              fieldInput('reg-pw', 'Password', 'password', 'At least 6 characters', '') +
+              fieldInput('reg-position', 'Job position', 'text', 'e.g. Presale / Solution Architect', '') +
+              '<button id="rbac-register" class="btn btn-primary w-full">Register</button>' +
+              statusDiv() +
+              '<button id="rbac-gologin" class="btn btn-ghost btn-sm w-full text-muted-foreground">Already have an account? Log in</button>' +
+            '</div>';
+        } else if (mode === 'forgot') {
+          inner =
+            gateHeader('mail', 'Reset password', 'Forgot your password?',
+              'Enter your email and we’ll send you a 6-digit verification code.') +
+            '<div class="card-content grid gap-4">' +
+              userField('forgot-user', 'Username', '') +
+              '<button id="rbac-sendcode" class="btn btn-primary w-full">Send code</button>' +
+              statusDiv() +
+              '<button id="rbac-gologin" class="btn btn-ghost btn-sm w-full text-muted-foreground">Back to login</button>' +
+            '</div>';
+        } else if (mode === 'reset') {
+          inner =
+            gateHeader('key-round', 'Reset password', 'Enter your code',
+              'We sent a 6-digit code to your email. Enter it with your new password.') +
+            '<div class="card-content grid gap-4">' +
+              '<div class="grid gap-1.5"><span class="label">Email</span>' +
+                '<div class="input flex items-center bg-muted text-muted-foreground">' + esc(resetEmail) + '</div></div>' +
+              fieldInput('reset-code', 'Verification code', 'text', '6-digit code', '') +
+              fieldInput('reset-pw', 'New password', 'password', 'At least 6 characters', '') +
+              '<button id="rbac-doreset" class="btn btn-primary w-full">Set new password</button>' +
+              statusDiv() +
+              '<button id="rbac-resend" class="btn btn-ghost btn-sm w-full text-muted-foreground">Resend code</button>' +
+              '<button id="rbac-gologin" class="btn btn-ghost btn-sm w-full text-muted-foreground">Back to login</button>' +
+            '</div>';
+        } else {   // pending
+          inner =
+            gateHeader('clock', 'Awaiting approval', 'Your request is pending',
+              'Thanks for registering. An admin needs to approve your account and set your role before you can sign in.') +
+            '<div class="card-content grid gap-4">' +
+              '<button id="rbac-gologin" class="btn btn-primary w-full">Back to login</button>' +
+            '</div>';
+        }
 
-      function buildGate(mode) {
-        var hasServer = !!(window.google && window.google.script && google.script.run);
         var ov = document.createElement('div');
         ov.id = 'rbac-gate';
         ov.className = 'fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto bg-background/95 p-4 backdrop-blur-sm';
-
-        var emailKnown = !!U.email;
-        ov.innerHTML =
-          '<div class="card w-full max-w-md">' +
-            '<div class="card-header">' +
-              '<div class="mb-1 flex items-center gap-2">' +
-                '<span class="flex h-9 w-9 items-center justify-center rounded-md bg-brand-navy text-white">' +
-                  '<i data-lucide="' + (mode === 'pending' ? 'clock' : 'user-plus') + '" class="h-4.5 w-4.5"></i></span>' +
-                '<span class="badge badge-secondary">' + (mode === 'pending' ? 'Awaiting approval' : 'Request access') + '</span>' +
-              '</div>' +
-              '<div class="card-title text-lg">' +
-                (mode === 'pending' ? 'Your request is pending' : 'Register for Product on Shelf') + '</div>' +
-              '<div class="card-desc">' +
-                (mode === 'pending'
-                  ? 'An admin needs to approve your account before you can use the estimator. You’ll get access as soon as they do.'
-                  : (emailKnown
-                      ? 'You’re signed in. Tell us who you are — an admin will approve your access.'
-                      : 'We couldn’t detect your Google sign-in. Open this app while signed in to your scmtechnologies.co.th account.')) +
-              '</div>' +
-            '</div>' +
-            '<div class="card-content grid gap-4">' +
-              (mode === 'pending'
-                ? ('<div class="grid gap-1.5"><span class="label">Signed in as</span>' +
-                     '<div class="input flex items-center bg-muted text-muted-foreground">' + esc(U.email) + '</div></div>' +
-                   '<button id="rbac-recheck" class="btn btn-primary w-full">Check again</button>')
-                : ('<div class="grid gap-1.5"><label class="label" for="rbac-name">Name</label>' +
-                     '<input id="rbac-name" type="text" class="input" placeholder="Your full name" value="' + esc(U.name || '') + '" ' + (emailKnown ? '' : 'disabled') + ' /></div>' +
-                   '<div class="grid gap-1.5"><span class="label">Email</span>' +
-                     '<div class="input flex items-center bg-muted text-muted-foreground">' + esc(U.email || 'not signed in') + '</div>' +
-                     '<span class="text-xs text-muted-foreground">From your Google sign-in — can’t be changed.</span></div>' +
-                   '<div class="grid gap-1.5"><label class="label" for="rbac-position">Job position</label>' +
-                     '<input id="rbac-position" type="text" class="input" placeholder="e.g. Presale / Solution Architect" value="' + esc(U.position || '') + '" ' + (emailKnown ? '' : 'disabled') + ' /></div>' +
-                   '<button id="rbac-submit" class="btn btn-primary w-full" ' + (emailKnown ? '' : 'disabled') + '>Request access</button>')) +
-              '<div id="rbac-status" class="text-sm text-muted-foreground"></div>' +
-            '</div>' +
-          '</div>';
+        ov.innerHTML = '<div class="card w-full max-w-md">' + inner + '</div>';
         document.body.appendChild(ov);
         if (window.lucide) lucide.createIcons();
 
         var statusEl = ov.querySelector('#rbac-status');
         function setStatus(msg, kind) {
+          if (!statusEl) return;
           statusEl.textContent = msg || '';
           statusEl.className = 'text-sm ' + (kind === 'err' ? 'text-brand-orange' : 'text-muted-foreground');
         }
+        function val(id) { var el = ov.querySelector('#' + id); return el ? (el.value || '').trim() : ''; }
+        function pw(id) { var el = ov.querySelector('#' + id); return el ? (el.value || '') : ''; }
+        function busy(btn, on) { if (btn) { btn.disabled = on; btn.classList.toggle('opacity-60', on); } }
 
-        var recheck = ov.querySelector('#rbac-recheck');
-        if (recheck) recheck.addEventListener('click', function () { location.reload(); });
+        if (mode === 'login' && flash) { setStatus(flash, 'ok'); flash = ''; }
 
-        var submit = ov.querySelector('#rbac-submit');
-        if (submit) submit.addEventListener('click', function () {
-          var name = (ov.querySelector('#rbac-name').value || '').trim();
-          var position = (ov.querySelector('#rbac-position').value || '').trim();
-          if (!name) { setStatus('Enter your name.', 'err'); return; }
-          if (!position) { setStatus('Enter your job position.', 'err'); return; }
-          if (!hasServer) { setStatus('Registration runs only in the deployed app (needs Google sign-in), not local preview.', 'err'); return; }
-          submit.disabled = true; submit.classList.add('opacity-60'); setStatus('Submitting…');
+        on('#rbac-goregister', function () { showGate('register'); });
+        on('#rbac-gologin', function () { showGate('login'); });
+        on('#rbac-goforgot', function () { showGate('forgot'); });
+
+        var sendBtn = ov.querySelector('#rbac-sendcode');
+        if (sendBtn) sendBtn.addEventListener('click', function () {
+          var email = fullEmail(val('forgot-user'));
+          if (!email) { setStatus('Enter your username.', 'err'); return; }
+          busy(sendBtn, true); setStatus('Sending code…');
           google.script.run
-            .withSuccessHandler(function (res) {
-              if (res && res.status === 'active') { location.reload(); return; }   // already approved
-              // Re-render the overlay as the pending state.
-              ov.remove();
-              U.role = 'pending';
-              buildGate('pending');
-            })
-            .withFailureHandler(function (err) {
-              submit.disabled = false; submit.classList.remove('opacity-60');
-              setStatus((err && err.message) || 'Could not submit your request.', 'err');
-            })
-            .registerSelf({ name: name, position: position });
+            .withSuccessHandler(function () { resetEmail = email; showGate('reset'); })
+            .withFailureHandler(function (err) { busy(sendBtn, false); setStatus((err && err.message) || 'Could not send the code.', 'err'); })
+            .requestPasswordReset(email);
         });
+
+        var resendBtn = ov.querySelector('#rbac-resend');
+        if (resendBtn) resendBtn.addEventListener('click', function () {
+          busy(resendBtn, true); setStatus('Resending…');
+          google.script.run
+            .withSuccessHandler(function () { busy(resendBtn, false); setStatus('A new code was sent to your email.'); })
+            .withFailureHandler(function (err) { busy(resendBtn, false); setStatus((err && err.message) || 'Could not resend.', 'err'); })
+            .requestPasswordReset(resetEmail);
+        });
+
+        var resetBtn = ov.querySelector('#rbac-doreset');
+        if (resetBtn) resetBtn.addEventListener('click', function () {
+          var code = val('reset-code'), npw = pw('reset-pw');
+          if (!code) { setStatus('Enter the code from your email.', 'err'); return; }
+          if (npw.length < 6) { setStatus('Password must be at least 6 characters.', 'err'); return; }
+          busy(resetBtn, true); setStatus('Updating…');
+          google.script.run
+            .withSuccessHandler(function () { flash = 'Password updated — sign in with your new password.'; showGate('login'); })
+            .withFailureHandler(function (err) { busy(resetBtn, false); setStatus((err && err.message) || 'Could not reset your password.', 'err'); })
+            .resetPassword(resetEmail, code, npw);
+        });
+
+        var loginBtn = ov.querySelector('#rbac-login');
+        if (loginBtn) {
+          function doLogin() {
+            var email = fullEmail(val('login-user')), password = pw('login-pw');
+            if (!email || !password) { setStatus('Enter your username and password.', 'err'); return; }
+            busy(loginBtn, true); setStatus('Signing in…');
+            google.script.run
+              .withSuccessHandler(function (res) {
+                busy(loginBtn, false);
+                if (res && res.status === 'ok') { saveToken(res.token); onAuthed(res.token, res.user); return; }
+                if (res && res.status === 'pending') { showGate('pending'); return; }
+                setStatus('Could not sign in.', 'err');
+              })
+              .withFailureHandler(function (err) { busy(loginBtn, false); setStatus((err && err.message) || 'Could not sign in.', 'err'); })
+              .login(email, password);
+          }
+          loginBtn.addEventListener('click', doLogin);
+          var pwField = ov.querySelector('#login-pw');
+          if (pwField) pwField.addEventListener('keydown', function (e) { if (e.key === 'Enter') doLogin(); });
+        }
+
+        var regBtn = ov.querySelector('#rbac-register');
+        if (regBtn) regBtn.addEventListener('click', function () {
+          var rec = { name: val('reg-name'), email: val('reg-email'), password: pw('reg-pw'), position: val('reg-position') };
+          if (!rec.name) { setStatus('Enter your name.', 'err'); return; }
+          if (!rec.email) { setStatus('Enter your email.', 'err'); return; }
+          if (rec.password.length < 6) { setStatus('Password must be at least 6 characters.', 'err'); return; }
+          if (!rec.position) { setStatus('Enter your job position.', 'err'); return; }
+          busy(regBtn, true); setStatus('Submitting…');
+          google.script.run
+            .withSuccessHandler(function () { showGate('pending'); })
+            .withFailureHandler(function (err) { busy(regBtn, false); setStatus((err && err.message) || 'Could not register.', 'err'); })
+            .registerSelf(rec);
+        });
+
+        function on(sel, fn) { var el = ov.querySelector(sel); if (el) el.addEventListener('click', fn); }
+      }
+
+      // --- Builders -------------------------------------------------------------------------------
+      function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (ch) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]; }); }
+      function statusDiv() { return '<div id="rbac-status" class="text-sm text-muted-foreground"></div>'; }
+      function fieldInput(id, label, type, ph, value) {
+        return '<div class="grid gap-1.5"><label class="label" for="' + id + '">' + esc(label) + '</label>' +
+          '<input id="' + id + '" type="' + type + '" class="input" placeholder="' + esc(ph) + '" value="' + esc(value) + '" ' +
+          (type === 'password' ? 'autocomplete="current-password"' : '') + ' /></div>';
+      }
+      // Username field: type only the front part; the @domain is a fixed suffix (used on login/forgot).
+      function userField(id, label, value) {
+        return '<div class="grid gap-1.5"><label class="label" for="' + id + '">' + esc(label) + '</label>' +
+          '<div class="flex">' +
+            '<input id="' + id + '" type="text" autocomplete="username" class="input min-w-0 flex-1 rounded-r-none" placeholder="firstname.lastname" value="' + esc(value) + '" />' +
+            '<span class="inline-flex shrink-0 items-center rounded-r-md border border-l-0 border-input bg-muted px-3 text-sm text-muted-foreground">' + esc(LOGIN_DOMAIN) + '</span>' +
+          '</div></div>';
+      }
+      function fullEmail(u) { u = String(u || '').trim(); return u ? (u.indexOf('@') >= 0 ? u : u + LOGIN_DOMAIN).toLowerCase() : ''; }
+      function brandHeader(title, desc) {
+        return '<div class="card-header items-center text-center">' +
+          '<span class="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-xl bg-brand-navy text-white"><i data-lucide="boxes" class="h-6 w-6"></i></span>' +
+          '<div class="card-title text-xl">' + esc(title) + '</div>' +
+          '<div class="card-desc">' + esc(desc) + '</div></div>';
+      }
+      function gateHeader(icon, badge, title, desc) {
+        return '<div class="card-header">' +
+          '<div class="mb-1 flex items-center gap-2">' +
+            '<span class="flex h-9 w-9 items-center justify-center rounded-md bg-brand-navy text-white"><i data-lucide="' + icon + '" class="h-5 w-5"></i></span>' +
+            '<span class="badge badge-secondary">' + esc(badge) + '</span></div>' +
+          '<div class="card-title text-lg">' + esc(title) + '</div>' +
+          '<div class="card-desc">' + esc(desc) + '</div></div>';
       }
     })();
   </script>

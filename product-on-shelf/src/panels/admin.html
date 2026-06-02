@@ -26,21 +26,22 @@
             <!-- Add / update a user -->
             <div class="card mt-6">
               <div class="card-header"><div class="card-title">Add or update a user</div>
-                <div class="card-desc">Saving an email that already exists updates its role. Identity comes from Google sign-in.</div></div>
-              <div class="card-content grid items-end gap-4 sm:grid-cols-2 lg:grid-cols-5">
+                <div class="card-desc">Saving an email that already exists updates it. Set a password to let a new user sign in (or reset one); leave blank to keep the current password.</div></div>
+              <div class="card-content grid items-end gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <div class="grid gap-1.5"><label class="label" for="adm-email">Email</label>
                   <input id="adm-email" type="email" placeholder="name@scmtechnologies.co.th" class="input" /></div>
                 <div class="grid gap-1.5"><label class="label" for="adm-role">Role <span class="text-muted-foreground">(access)</span></label>
                   <select id="adm-role" class="select">
-                    <option value="admin">admin</option>
-                    <option value="editor">editor</option>
-                    <option value="sales">sales</option>
-                    <option value="viewer" selected>viewer</option>
+                    <option value="admin">admin — full access</option>
+                    <option value="sales">sales — build &amp; download estimates</option>
+                    <option value="viewer" selected>viewer — read-only</option>
                   </select></div>
                 <div class="grid gap-1.5"><label class="label" for="adm-position">Job position</label>
                   <input id="adm-position" type="text" placeholder="e.g. Presale / Solution Architect" class="input" /></div>
                 <div class="grid gap-1.5"><label class="label" for="adm-name">Name (optional)</label>
                   <input id="adm-name" type="text" class="input" /></div>
+                <div class="grid gap-1.5"><label class="label" for="adm-password">Set / reset password</label>
+                  <input id="adm-password" type="password" autocomplete="new-password" placeholder="Leave blank to keep" class="input" /></div>
                 <button id="adm-save" class="btn btn-primary">Save user</button>
               </div>
             </div>

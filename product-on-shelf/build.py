@@ -112,9 +112,8 @@ def do_build_index(out_path):
         # Read path: inject window.PRICING server-side, BEFORE the flow scripts run. Code.gs sets the
         # PRICING_JSON template var (ReadPath.gs:posPricingJson_); google.script.run would be too late.
         "<script>window.PRICING = <?!= PRICING_JSON ?>;</script>",
-        # RBAC: inject window.USER = { email, role } from the signed-in user (Auth.gs:userContextJson_).
-        # src/flows/_rbac.html reads it to gate the UI by role.
-        "<script>window.USER = <?!= USER_JSON ?>;</script>",
+        # NB: the Google identity is intentionally NOT injected — auth is email+password + a session
+        # token (Auth.gs). Nothing about the signed-in Google user is exposed in the page source.
     ]
     for rel, _a, _b in MANIFEST[1:]:
         lines.append(f"<?!= include('{include_name(rel)}') ?>")
