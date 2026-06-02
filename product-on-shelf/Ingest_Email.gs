@@ -64,8 +64,11 @@ var INGEST = {
   DAILY_WINDOW: '2d',                         // daily overlap window; price_id dedupe makes it idempotent
   DISCOVER_MONTHS: 12,                        // discoverAllPriceMail() comprehensive sweep window
   MAX_THREADS: 250,                           // cap per run for daily/backfill (Gmail/exec-time safety)
+  ATTACH_MONTHS: 12,                          // fetchAttachmentQuotes() window — distributor xlsx quotes (firewall/HCI/server)
+  ATTACH_THREADS: 150,                        // cap per attachment sweep — small targeted set, converges in one run
   DISCOVER_THREADS: 400,                      // cap per discovery run (≤500 Gmail max; cursor walks older across runs)
   DISCOVER_RESUME_AFTER_MS: 60 * 1000,        // gap between auto-resume discovery batches (startDiscovery)
+  DISCOVER_MAX_TICKS: 20,                      // hard ceiling on auto-resume reschedules per startDiscovery() — quota safety belt
   TIME_BUDGET_MS: 4.5 * 60 * 1000,            // stop before the 6-min execution limit
   CHAT_WEBHOOK_URL: '',                       // paste the Google Chat incoming webhook; '' = skip notify
   TZ: 'Asia/Bangkok'
@@ -169,14 +172,22 @@ function discoverAllPriceMail() {
   // older. Otherwise the window is exhausted → mark done. Never advance/finish during a DRY_RUN.
   var more = res.timedOut || res.threadsFetched >= cap;
   if (more) {
-    if (!INGEST.DRY_RUN && res.oldestYmd) {
-      metaSet_(ss, 'email_discover_before', ymdPlusDays_(res.oldestYmd, 1).replace(/-/g, '/'));
-    }
-    Logger.log('Discovery PARTIAL (' + res.threadsFetched + ' threads) — re-run discoverAllPriceMail() to continue older.' +
-      (res.oldestYmd ? '' : '  (no progress this run — raise TIME_BUDGET_MS or trim PRICE_SUBJECT_TERMS)'));
+    // Advance the resume boundary to (oldest fetched day + 1). If that equals the cursor we STARTED
+    // this run with, the batch could not get past a single boundary day within one execution budget —
+    // i.e. NO forward progress. Re-running would just re-read the same slice and burn Gmail read quota,
+    // so flag res.progressed=false and leave the cursor put; the chain (_discoverTick_) stops on this.
+    var newCursor = res.oldestYmd ? ymdPlusDays_(res.oldestYmd, 1).replace(/-/g, '/') : '';
+    res.progressed = !!newCursor && newCursor !== cursor;
+    if (!INGEST.DRY_RUN && res.progressed) metaSet_(ss, 'email_discover_before', newCursor);
+    Logger.log('Discovery PARTIAL (' + res.threadsFetched + ' threads, scanned ' + res.scanned + ')' +
+      (res.progressed
+        ? ' — advanced to before:' + newCursor + '; re-run to continue older.'
+        : ' — NO PROGRESS (boundary day ' + (cursor || 'newest') + ' exceeds one run budget). ' +
+          'Cursor unchanged; raise TIME_BUDGET_MS or narrow the net, then re-run.'));
   } else if (!INGEST.DRY_RUN) {
     metaSet_(ss, 'email_discover_done', 'TRUE');
     metaSet_(ss, 'email_discover_before', '');
+    res.progressed = true;
     Logger.log('Discovery COMPLETE — swept ' + INGEST.DISCOVER_MONTHS + ' months of price mail.');
   }
   return res;
@@ -187,6 +198,7 @@ function resetDiscover() {
   var ss = db_();
   metaSet_(ss, 'email_discover_done', 'FALSE');
   metaSet_(ss, 'email_discover_before', '');
+  metaSet_(ss, 'email_discover_ticks', '0');
   Logger.log('Discovery gate cleared — discoverAllPriceMail() will sweep from the newest again.');
 }
 
@@ -198,14 +210,22 @@ function resetDiscover() {
  */
 function startDiscovery() {
   deleteDiscoverTriggers_();          // start clean — no leftover chain from a previous run
+  metaSet_(db_(), 'email_discover_ticks', '0');   // fresh auto-resume budget (DISCOVER_MAX_TICKS)
   _discoverTick_();                   // first batch now; reschedules itself if more remains
 }
 
-/** Trigger handler: run one discovery batch, then reschedule unless done / errored / dry-run. */
+/** Trigger handler: run one discovery batch, then reschedule unless done / errored / dry-run /
+ *  no-progress / tick-cap. The last two are quota safety belts — a batch that can't clear a boundary
+ *  day (res.progressed === false) or a chain that has ticked DISCOVER_MAX_TICKS times STOPS instead of
+ *  re-reading the same mail until the daily Gmail quota is exhausted. Re-run startDiscovery() to resume. */
 function _discoverTick_() {
   deleteDiscoverTriggers_();          // at most one pending tick — delete before (re)scheduling
+  var ss = db_();
+  var ticks = (parseInt(metaGet_(ss, 'email_discover_ticks'), 10) || 0) + 1;
+  metaSet_(ss, 'email_discover_ticks', String(ticks));
+
   var res = discoverAllPriceMail();
-  if (metaGet_(db_(), 'email_discover_done') === 'TRUE') {
+  if (metaGet_(ss, 'email_discover_done') === 'TRUE') {
     Logger.log('Auto-resume: discovery COMPLETE — chain stopped.');
     return;
   }
@@ -217,8 +237,18 @@ function _discoverTick_() {
     Logger.log('Auto-resume: DRY_RUN — not rescheduling. Set INGEST.DRY_RUN=false to sweep for real.');
     return;
   }
+  if (res && res.progressed === false) {   // boundary day didn't clear — re-running would only burn quota
+    Logger.log('Auto-resume: STOPPED — no forward progress this batch (cursor stuck). ' +
+      'Raise TIME_BUDGET_MS or narrow the net, then re-run startDiscovery(). Quota protected.');
+    return;
+  }
+  if (ticks >= INGEST.DISCOVER_MAX_TICKS) {
+    Logger.log('Auto-resume: STOPPED at tick cap (' + ticks + '/' + INGEST.DISCOVER_MAX_TICKS + '). ' +
+      'Cursor saved — re-run startDiscovery() to continue older (resets the tick budget). Quota protected.');
+    return;
+  }
   ScriptApp.newTrigger('_discoverTick_').timeBased().after(INGEST.DISCOVER_RESUME_AFTER_MS).create();
-  Logger.log('Auto-resume: next batch in ' + (INGEST.DISCOVER_RESUME_AFTER_MS / 1000) + 's.');
+  Logger.log('Auto-resume: tick ' + ticks + '/' + INGEST.DISCOVER_MAX_TICKS + ' — next batch in ' + (INGEST.DISCOVER_RESUME_AFTER_MS / 1000) + 's.');
 }
 
 /** Cancel the auto-resume chain (any pending _discoverTick_ triggers). */
@@ -400,6 +430,47 @@ function installEmailIngestTrigger() {
   });
   ScriptApp.newTrigger('ingestEmailPrices').timeBased().everyDays(1).atHour(2).create();
   Logger.log('Daily trigger installed (≈02:00 ' + INGEST.TZ + ').');
+}
+
+/**
+ * Targeted attachment sweep — distributor / [EXT] mail WITH attachments only (the small, fast set that
+ * carries the .xlsx quotes: firewall, HCI/Nutanix, servers). Reuses runIngest_ (narrow gate + the xlsx
+ * attachment reader), so it inherits the _alias gate, price_id dedupe, and _sync_log. Far cheaper than
+ * the broad inbox discovery sweep — the from:(distributors) has:attachment set is small, so it converges
+ * in one run and is safe to run daily. Re-runs are idempotent (already-captured rows upsert 0).
+ */
+function fetchAttachmentQuotes() {
+  var q = buildQuery_('has:attachment newer_than:' + INGEST.ATTACH_MONTHS + 'm');   // {from:(distributors) [EXT]} has:attachment
+  var res = runIngest_(q, 'attach', { broadGate: false, cap: INGEST.ATTACH_THREADS });
+  Logger.log('Attachment sweep (' + INGEST.ATTACH_MONTHS + 'm): ' + (res.status === 'error'
+    ? 'ERROR — ' + res.error
+    : 'scanned ' + res.scanned + ', upserted ' + res.upserted + ' (provisional ' + res.provisional +
+      '), skipped ' + res.skipped +
+      ((res.timedOut || res.threadsFetched >= INGEST.ATTACH_THREADS)
+        ? '  [hit cap/budget — raise ATTACH_THREADS or narrow ATTACH_MONTHS, then re-run (dedupe-safe)]' : '')));
+  return res;
+}
+
+/**
+ * Install a DAILY trigger running fetchAttachmentQuotes() at 16:00 Asia/Bangkok. That is ~02:00 US-Pacific
+ * (PDT) / ~01:00 (PST) — safely AFTER the midnight-Pacific Gmail-quota reset in both DST modes, so the
+ * sweep always runs on fresh quota and never lands on a drained day. Run ONCE from the editor; then it is
+ * hands-off. stopDailyAttachmentSweep() removes it.
+ */
+function scheduleDailyAttachmentSweep() {
+  stopDailyAttachmentSweep();   // no duplicate triggers
+  ScriptApp.newTrigger('fetchAttachmentQuotes').timeBased().everyDays(1).atHour(16).create();
+  Logger.log('Scheduled fetchAttachmentQuotes() daily at 16:00 ' + INGEST.TZ + ' (post US-Pacific quota reset).');
+}
+
+/** Remove the daily attachment-sweep trigger(s). Returns the count removed. */
+function stopDailyAttachmentSweep() {
+  var n = 0;
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'fetchAttachmentQuotes') { ScriptApp.deleteTrigger(t); n++; }
+  });
+  if (n) Logger.log('Removed ' + n + ' daily attachment-sweep trigger(s).');
+  return n;
 }
 
 // ---------------------------------------------------------------------------

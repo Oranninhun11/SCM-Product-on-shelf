@@ -865,3 +865,127 @@ quotation export (still pending, pre-existing).
 > Resume: `/oran-software-engineer` on `product-on-shelf-app` — commit the uncommitted UI/UX + RBAC stack
 > (items 2–8) and push to GitHub; Oran activates RBAC via the deployment change + `setupRoles()`. Then the
 > template-fill quotation export.
+
+---
+
+# Handoff — Product on Shelf (cont.)
+_Session: 2026-06-02 · software-engineer mode · commit + push + repo-rename findings_
+
+## Stage
+The UI/UX + RBAC stack from the prior section is now **committed and pushed**. The git remote
+turned out to be **renamed/cleaned up by Oran** — diagnosed and handled. RBAC still needs Oran's
+deployment change + `setupRoles()` to go live (unchanged).
+
+## What happened this session
+- **Committed `5b7e1c9`** ("product-on-shelf: price-list UX (brand+model), Cabling & SFP+, RBAC + admin
+  editor") — scoped to `product-on-shelf/` ONLY (incl. the Flow-diagram changes + this handoff). Verified
+  nothing outside `product-on-shelf/` was staged.
+- **Diagnosed "why does GitHub show one dir?"** — the remote had advanced 5 commits beyond local: Oran
+  (via GitHub web) ran `Delete .claude directory`, `Delete CLAUDE.md`, `Delete CLIENT_TRACKER.md`,
+  `Create/Update README.md`. So the repo tip is **README + product-on-shelf only** by design.
+- **Repo was also RENAMED** `Oranninhun11/Claude` → **`Oranninhun11/SCM_Product_on_shelf`** (revealed by the
+  push "repository moved" notice). Updated the local remote URL (`git remote set-url enter …/SCM_Product_on_shelf.git`).
+- **Reconciled the divergence safely**: local was *behind 5* (ancestor, not diverged). Committed pos →
+  `git rebase --autostash enter/product-on-shelf-app` (replayed the pos-only commit on top of the deletes) →
+  resolved the modify/delete autostash conflicts on the SCM files with `git reset -- .claude CLAUDE.md
+  CLIENT_TRACKER.md` (kept Oran's content on disk, now **untracked**) → dropped the autostash → pushed.
+- **Verified**: pushed tree = `README.md` + `product-on-shelf/` only; remote tip == local HEAD == `5b7e1c9`;
+  Oran's local SCM files (`CLAUDE.md`, `CLIENT_TRACKER.md`, `.claude/`) all still present on disk.
+
+## Open / Oran's manual steps
+- 🔴 **Public-history exposure**: if `SCM_Product_on_shelf` is public, `.claude/`/`CLAUDE.md`/`CLIENT_TRACKER.md`
+  are **still readable in older commits** (up to `152a908`, before the deletes). Deleting-the-file ≠ removing
+  from history. Fix = make repo **private**, or **purge history** (`git filter-repo`/BFG + force-push). Claude
+  offered to prep the filter-repo commands; can't change repo visibility (GitHub settings = Oran's action).
+- 🔴 **Activate RBAC** (unchanged from prior section): deployment → Execute as Me · Access scmtechnologies.co.th
+  domain; run `setupRoles()`; confirm `_RBAC` admin row.
+- 🟡 SFP→cabling live re-route (sheet find-replace + reseed) and per-role gating still pending (prior section).
+
+## Next concrete step
+Decide the history-exposure action (private vs purge). Then activate RBAC (deployment + `setupRoles()`).
+Then the template-fill quotation export (still the big pending feature).
+
+## Suggested skills
+- **`/oran-software-engineer`** on `product-on-shelf-app`. Remote is now `enter` → `SCM_Product_on_shelf`.
+  `.claude/CLAUDE.md/CLIENT_TRACKER.md` are intentionally **untracked** in this repo — never re-add them.
+
+## Decisions (the why)
+- **Scoped commit to `product-on-shelf/` only** + `--autostash` rebase onto the remote's clean tip — keeps the
+  public repo to one dir and never re-introduces the SCM files Oran deleted; his local copies stay on disk untracked.
+- **Resolved modify/delete via `git reset -- <paths>`** (not stash-pop) — clears the conflict while preserving
+  Oran's working content; nothing SCM ever enters a commit.
+
+> Resume: `/oran-software-engineer` on `product-on-shelf-app` (remote `SCM_Product_on_shelf`) — settle the
+> public-history exposure (private or purge), then activate RBAC (deployment + `setupRoles()`), then build the
+> template-fill quotation export.
+
+---
+
+# Handoff — Product on Shelf (cont.)
+_Session: 2026-06-02 (early AM, ~02:30 ICT) · software-engineer mode · discovery quota-burn fix + Option B attachment sweep_
+
+## Stage
+Ingestion hardening, `Ingest_Email.gs` only. Two fixes built, **verified, and pushed to Apps Script `@HEAD`** —
+**NOT git-committed** (re-verified: HEAD `5b7e1c9`, `Ingest_Email.gs` = `M`, 0 occurrences of the new fns in HEAD).
+Read path already wired; app serves live `Price`. The xlsx firewall/HCI/server prices are still **not yet in
+`Price`** — Option B (below) is the path that pulls them; awaits Oran's GAS run after the quota resets.
+
+## Verified first (don't re-do)
+- **Live DB read-back** (`1kzKWvaJN7z7…`): `Price` = **51 rows / 26 SKUs**, all `switch` (Cisco/AlliedTelesis/H3C)
+  + 2 `server` (RHEL). **No firewall / HCI / server-HW** — those arrive as `.xlsx` attachments (→ Option B).
+- `_sync_log` showed the bug below; read path + items 2–8 confirmed committed (`60769a0`/`5b7e1c9`).
+
+## 🔴 Bug found (root cause of the 06-01 quota death — was mis-believed "all by design")
+`startDiscovery → _discoverTick_` was **non-convergent**: 06-01 it ran **~80× from 10:20–16:03**, every run
+`upserted 0 / scanned ~319` (re-reading the same window), **never COMPLETE**, then exhausted the daily Gmail
+quota (`Service invoked too many times: premium gmail` @16:03/19:14/19:17). Each 4.5-min batch can't clear a
+dense recent boundary day (worse now Drive/xlsx slows each run) → cursor advances ≤1 day or stalls → re-reads
+~319 msgs/run → reschedules every 60s until quota dies. A broad 12-mo whole-net sweep is quota-infeasible this way.
+
+## Built + shipped (`Ingest_Email.gs`; syntax + node logic-harness verified; clasp-pushed `@HEAD` twice)
+1. **Min guard** — `discoverAllPriceMail` sets `res.progressed` (new cursor == old → no progress; cursor left put);
+   `_discoverTick_` **STOPS** on `progressed === false` and at `DISCOVER_MAX_TICKS: 20` instead of rescheduling.
+   `startDiscovery`/`resetDiscover` reset `email_discover_ticks`. **12/12 harness cases pass.** Stops the burn —
+   does NOT make a dense broad sweep complete (re-running `startDiscovery` will likely just log `NO PROGRESS`).
+2. **Option B — targeted attachment sweep (the price-getter)** — `fetchAttachmentQuotes()` runs
+   `{from:(distributors) [EXT]} has:attachment newer_than:12m` via `runIngest_` (reuses `_alias` gate, dedupe,
+   `_sync_log`, xlsx reader) → pulls firewall/HCI/server `.xlsx` quotes; small set, converges in one run, idempotent.
+   `scheduleDailyAttachmentSweep()` = daily trigger **16:00 Asia/Bangkok** (clears midnight-Pacific reset in PDT+PST);
+   `stopDailyAttachmentSweep()` removes it. Knobs `ATTACH_MONTHS:12`, `ATTACH_THREADS:150`.
+
+## Open questions / blockers
+- 🔴 **Gmail quota not reset until ~14:00 Thai 06-02** (midnight US-Pacific). Anything touching Gmail before then quota-errors (harmless).
+- 🔴 **Oran's GAS steps (Claude can't run GAS):** after ~2 PM Thai → `fetchAttachmentQuotes()` (backfill xlsx, watch
+  `upserted N`), then `scheduleDailyAttachmentSweep()`. *OR* run `scheduleDailyAttachmentSweep()` **now** (quota-free —
+  trigger install only) → first sweep auto-fires 16:00 today.
+- 🟡 **Curation loop:** new xlsx parts land in `_alias` **blank** → hand to Claude → extend `ALIAS_SEED` + push →
+  `seedAliases()` → re-run `fetchAttachmentQuotes()` to price them.
+- 🟡 **Needs Drive API on** (Oran enabled 06-01). `upserted 0` with attachments present ⇒ check Drive.
+- 🟡 Daily sweep re-checks 12mo each day (idempotent; lower `ATTACH_MONTHS` if it drags).
+- 🟡 **NOT git-committed** — guard + Option B pushed to Apps Script, not committed (Oran approved pushes, not commits).
+
+## Next concrete step
+After ~14:00 Thai 06-02, Oran runs `fetchAttachmentQuotes()` + `scheduleDailyAttachmentSweep()` in the GAS editor;
+then ping Claude to **read the live DB back** and report which firewall/HCI/server SKUs landed + which `_alias`
+blanks need mapping. Then git-commit the pushed `Ingest_Email.gs` edits.
+
+## Suggested skills
+- **`/oran-software-engineer`** — verify by reading the live sheet back (Google read-only; can't run GAS);
+  `npx @google/clasp push -f` locally; node logic harness for cursor/tick logic.
+
+## Decisions (the why)
+- **Min guard before full convergence** (Oran's pick) — stop the quota burn first; the targeted pass is the price-getter.
+- **Option B = targeted `has:attachment`, not broad discovery** — broad 12-mo whole-inbox sweep is quota-infeasible +
+  non-convergent; distributor+attachment is small, converges in one run, reuses all existing plumbing.
+- **No-progress = STOP, not force-advance** — safest; force-advancing could skip data. Cursor left put so a re-run
+  (after a `TIME_BUDGET_MS` bump) resumes from the same boundary.
+- **Daily trigger 16:00 Thai (not 15:00)** — clears midnight-Pacific reset in both PDT (14:00 ICT) and PST (15:00 ICT).
+
+## References
+- Live DB `1kzKWvaJN7z7wdcYjbcZHYXZpFfIxsqFyBDg8Ysxs7kY` (read back to diagnose) · `DB_SCHEMA.md` (`buildCatalog`) ·
+  `reference_product_on_shelf_deploy.md` (clasp v3 / `@HEAD` loop) · CLAUDE.md house rules.
+
+> Resume: `/oran-software-engineer` on `product-on-shelf-app` — after Oran runs `fetchAttachmentQuotes()` +
+> `scheduleDailyAttachmentSweep()` (post ~14:00 Thai 06-02), read the live DB back to confirm xlsx
+> firewall/HCI/server prices landed + list new `_alias` blanks to map; then git-commit the pushed
+> `Ingest_Email.gs` edits (guard + Option B).
