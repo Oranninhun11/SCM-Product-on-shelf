@@ -1,46 +1,166 @@
-  <!-- ===================== RBAC — role-gated UI ===================== -->
+  <!-- ===================== RBAC — role-gated UI + login/register gate ===================== -->
   <script>
     /**
-     * Email-login RBAC. Identity + role are injected server-side as window.USER = { email, role }
-     * by Code.gs doGet (see Auth.gs), the same seam as window.PRICING. This script only gates the
-     * UI by role — the real security boundary is the Google Workspace domain sign-in on the
-     * deployment (Execute as: Me · Access: anyone at scmtechnologies.co.th). Client gating alone is
-     * cosmetic, so nothing sensitive should rely on it without a server check.
+     * Email-login RBAC. Identity + role are injected server-side as
+     * window.USER = { email, role, name, position } by Code.gs doGet (see Auth.gs), the same seam
+     * as window.PRICING. The real security boundary is the Google Workspace domain sign-in on the
+     * deployment (Execute as: Me · Access: anyone at scmtechnologies.co.th); this client gating is
+     * cosmetic, and every sensitive write is re-checked server-side (requireAdmin_).
      *
-     * v1 policy: `admin` sees everything incl. the Workspace tools (UI Kit, Settings). Every other
-     * role — including the default `viewer` for signed-in staff not yet listed in the Roles tab —
-     * gets the estimator without those admin tools. Extend ADMIN_VIEWS / add roles as the sheet grows.
+     * Access states (role):
+     *   admin                     → full app incl. Workspace tools (UI Kit, Settings, Users & Roles)
+     *   editor / sales / viewer   → the estimator, without the admin tools
+     *   pending                   → registered, awaiting admin approval → blocked by an overlay
+     *   unregistered / anonymous  → signed in but no _RBAC row → register overlay (Name / Job position)
+     *
+     * Login = Google sign-in (the deployment). Register = registerSelf() files a PENDING request the
+     * admin approves in Users & Roles. Until approved, the overlay covers the app.
      */
     (function () {
       var U = window.USER || { email: '', role: 'admin' };       // missing (local preview) → admin so dev sees all
-      if (!U.role || U.role === 'anonymous') U.role = 'viewer';  // signed-in-but-unidentified → safe default
-      var isAdmin = U.role === 'admin';
-      document.documentElement.setAttribute('data-role', U.role);
+      var role = String(U.role || 'admin').toLowerCase();
+      var isAdmin   = role === 'admin';
+      var needRegister = role === 'unregistered' || role === 'anonymous';
+      var needApproval = role === 'pending';
+      document.documentElement.setAttribute('data-role', role);
 
+      // --- Blocked states: cover the app with a login/register or awaiting-approval overlay --------
+      if (needRegister || needApproval) {
+        buildGate(needApproval ? 'pending' : 'register');
+        return;   // don't bother wiring the (hidden) app chrome — the overlay owns the screen
+      }
+
+      // --- Approved: gate admin-only nav + render the signed-in chip ------------------------------
       var ADMIN_VIEWS = { admin: true, settings: true, uikit: true };   // views only admins may open
-
       if (!isAdmin) {
         Object.keys(ADMIN_VIEWS).forEach(function (v) {
           document.querySelectorAll('[data-nav="' + v + '"]').forEach(function (n) { n.style.display = 'none'; });
         });
-        // Hide the now-empty "Workspace" sidebar section label (UI Kit + Settings were its only items).
         document.querySelectorAll('.section-label').forEach(function (lbl) {
           if (/workspace/i.test(lbl.textContent || '')) lbl.style.display = 'none';
         });
       }
 
-      // Header chip: signed-in email + role. Sits left of the help (?) button; hidden on small screens.
-      var help = document.querySelector('header [data-nav="guide"]');
-      if (help && help.parentNode) {
-        var chip = document.createElement('div');
-        chip.className = 'mr-1 hidden items-center gap-2 rounded-md border border-border px-2.5 py-1 text-xs sm:inline-flex';
-        chip.title = U.email ? (U.email + ' · ' + U.role) : 'not signed in';
-        chip.innerHTML =
-          '<i data-lucide="user-round" class="h-3.5 w-3.5 text-muted-foreground"></i>' +
-          '<span class="max-w-[16rem] truncate text-foreground">' + (U.email || 'not signed in') + '</span>' +
-          '<span class="badge badge-brand">' + U.role + '</span>';
-        help.parentNode.insertBefore(chip, help);
+      // Populate the header user menu (shell markup) with the signed-in identity + role, and wire
+      // the dropdown + Sign out. "Logout" in an Apps Script web app means signing out of the Google
+      // session the app trusts — there is no separate per-app login — so it points at Google logout.
+      (function () {
+        var btn  = document.getElementById('user-menu-btn');
+        var menu = document.getElementById('user-menu');
+        var nameEl = document.getElementById('user-menu-name');
+        var roleEl = document.getElementById('user-menu-role');
+        var fullEl = document.getElementById('user-menu-fullname');
+        var mailEl = document.getElementById('user-menu-email');
+        if (nameEl) nameEl.textContent = U.name || U.email || 'Account';
+        if (roleEl) roleEl.textContent = role;
+        if (fullEl) fullEl.textContent = U.name || (U.email ? 'Signed in' : 'Not signed in');
+        if (mailEl) mailEl.textContent = U.email || '';
+        if (btn && menu) {
+          btn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            var willOpen = menu.classList.contains('hidden');
+            menu.classList.toggle('hidden');
+            btn.setAttribute('aria-expanded', String(willOpen));
+          });
+          document.addEventListener('click', function (e) {
+            if (menu.classList.contains('hidden')) return;
+            if (!menu.contains(e.target) && !btn.contains(e.target)) {
+              menu.classList.add('hidden'); btn.setAttribute('aria-expanded', 'false');
+            }
+          });
+          document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') { menu.classList.add('hidden'); btn.setAttribute('aria-expanded', 'false'); }
+          });
+        }
+        var signout = document.getElementById('user-menu-signout');
+        if (signout) signout.addEventListener('click', function (e) {
+          e.preventDefault();
+          if (window.confirm('Sign out of your Google account for this browser?')) {
+            window.location.href = 'https://accounts.google.com/Logout';
+          }
+        });
         if (window.lucide) lucide.createIcons();
+      })();
+
+      // --- Helpers --------------------------------------------------------------------------------
+      function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (ch) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]; }); }
+
+      function buildGate(mode) {
+        var hasServer = !!(window.google && window.google.script && google.script.run);
+        var ov = document.createElement('div');
+        ov.id = 'rbac-gate';
+        ov.className = 'fixed inset-0 z-[60] flex items-center justify-center overflow-y-auto bg-background/95 p-4 backdrop-blur-sm';
+
+        var emailKnown = !!U.email;
+        ov.innerHTML =
+          '<div class="card w-full max-w-md">' +
+            '<div class="card-header">' +
+              '<div class="mb-1 flex items-center gap-2">' +
+                '<span class="flex h-9 w-9 items-center justify-center rounded-md bg-brand-navy text-white">' +
+                  '<i data-lucide="' + (mode === 'pending' ? 'clock' : 'user-plus') + '" class="h-4.5 w-4.5"></i></span>' +
+                '<span class="badge badge-secondary">' + (mode === 'pending' ? 'Awaiting approval' : 'Request access') + '</span>' +
+              '</div>' +
+              '<div class="card-title text-lg">' +
+                (mode === 'pending' ? 'Your request is pending' : 'Register for Product on Shelf') + '</div>' +
+              '<div class="card-desc">' +
+                (mode === 'pending'
+                  ? 'An admin needs to approve your account before you can use the estimator. You’ll get access as soon as they do.'
+                  : (emailKnown
+                      ? 'You’re signed in. Tell us who you are — an admin will approve your access.'
+                      : 'We couldn’t detect your Google sign-in. Open this app while signed in to your scmtechnologies.co.th account.')) +
+              '</div>' +
+            '</div>' +
+            '<div class="card-content grid gap-4">' +
+              (mode === 'pending'
+                ? ('<div class="grid gap-1.5"><span class="label">Signed in as</span>' +
+                     '<div class="input flex items-center bg-muted text-muted-foreground">' + esc(U.email) + '</div></div>' +
+                   '<button id="rbac-recheck" class="btn btn-primary w-full">Check again</button>')
+                : ('<div class="grid gap-1.5"><label class="label" for="rbac-name">Name</label>' +
+                     '<input id="rbac-name" type="text" class="input" placeholder="Your full name" value="' + esc(U.name || '') + '" ' + (emailKnown ? '' : 'disabled') + ' /></div>' +
+                   '<div class="grid gap-1.5"><span class="label">Email</span>' +
+                     '<div class="input flex items-center bg-muted text-muted-foreground">' + esc(U.email || 'not signed in') + '</div>' +
+                     '<span class="text-xs text-muted-foreground">From your Google sign-in — can’t be changed.</span></div>' +
+                   '<div class="grid gap-1.5"><label class="label" for="rbac-position">Job position</label>' +
+                     '<input id="rbac-position" type="text" class="input" placeholder="e.g. Presale / Solution Architect" value="' + esc(U.position || '') + '" ' + (emailKnown ? '' : 'disabled') + ' /></div>' +
+                   '<button id="rbac-submit" class="btn btn-primary w-full" ' + (emailKnown ? '' : 'disabled') + '>Request access</button>')) +
+              '<div id="rbac-status" class="text-sm text-muted-foreground"></div>' +
+            '</div>' +
+          '</div>';
+        document.body.appendChild(ov);
+        if (window.lucide) lucide.createIcons();
+
+        var statusEl = ov.querySelector('#rbac-status');
+        function setStatus(msg, kind) {
+          statusEl.textContent = msg || '';
+          statusEl.className = 'text-sm ' + (kind === 'err' ? 'text-brand-orange' : 'text-muted-foreground');
+        }
+
+        var recheck = ov.querySelector('#rbac-recheck');
+        if (recheck) recheck.addEventListener('click', function () { location.reload(); });
+
+        var submit = ov.querySelector('#rbac-submit');
+        if (submit) submit.addEventListener('click', function () {
+          var name = (ov.querySelector('#rbac-name').value || '').trim();
+          var position = (ov.querySelector('#rbac-position').value || '').trim();
+          if (!name) { setStatus('Enter your name.', 'err'); return; }
+          if (!position) { setStatus('Enter your job position.', 'err'); return; }
+          if (!hasServer) { setStatus('Registration runs only in the deployed app (needs Google sign-in), not local preview.', 'err'); return; }
+          submit.disabled = true; submit.classList.add('opacity-60'); setStatus('Submitting…');
+          google.script.run
+            .withSuccessHandler(function (res) {
+              if (res && res.status === 'active') { location.reload(); return; }   // already approved
+              // Re-render the overlay as the pending state.
+              ov.remove();
+              U.role = 'pending';
+              buildGate('pending');
+            })
+            .withFailureHandler(function (err) {
+              submit.disabled = false; submit.classList.remove('opacity-60');
+              setStatus((err && err.message) || 'Could not submit your request.', 'err');
+            })
+            .registerSelf({ name: name, position: position });
+        });
       }
     })();
   </script>

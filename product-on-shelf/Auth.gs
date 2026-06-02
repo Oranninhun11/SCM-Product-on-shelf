@@ -2,8 +2,13 @@
  * Product on Shelf — RBAC (email login + role) and the admin Users & Roles editor.
  *
  * Identity is the signed-in Google user (Session.getActiveUser); the role comes from the `_RBAC`
- * tab in the DB sheet (email -> role). doGet injects window.USER = { email, role } the same way
- * window.PRICING is injected (Code.gs + build.py); src/flows/_rbac.html gates the UI by role.
+ * tab in the DB sheet (email -> role). doGet injects window.USER = { email, role, name, position }
+ * the same way window.PRICING is injected (Code.gs + build.py); src/flows/_rbac.html gates the UI.
+ *
+ * LOGIN + REGISTER: login is the Google sign-in itself. A signed-in user with no `_RBAC` row is
+ * 'unregistered' and sees a register form (Name + Job position; email is taken from the session) →
+ * registerSelf() files a row with role 'pending'. A 'pending' user is blocked until an admin grants
+ * a real role in the Users & Roles view (rbacSave). So access = admin approval, not mere sign-in.
  *
  * The admin "Users & Roles" view (src/panels/admin.html + src/flows/_admin.html) calls the
  * rbac*() functions below via google.script.run to manage the `_RBAC` tab from the web. Every
@@ -19,19 +24,26 @@
  * adapts to however the `_RBAC` tab is laid out, as long as it has an email-ish and role-ish column.
  */
 var ROLES_SHEET  = '_RBAC';
-var DEFAULT_ROLE = 'viewer';   // signed-in domain user not (yet) listed in _RBAC — can use the estimator
+var UNREGISTERED = 'unregistered';   // signed-in domain user with no _RBAC row — must register first
+var PENDING_ROLE = 'pending';        // registered, awaiting admin approval — NO app access until approved
 var ADMIN_EMAIL  = 'oran.nin@scmtechnologies.co.th';
 
 // ---------------------------------------------------------------------------
 // Identity + role (read path: injected into window.USER)
 // ---------------------------------------------------------------------------
 
-/** Identity + role for the current request. { email, role }. role 'anonymous' = couldn't identify. */
+/**
+ * Identity + role for the current request. { email, role, name, position }.
+ * role values: 'anonymous' (couldn't identify) · 'unregistered' (signed in, no _RBAC row — must
+ * register) · 'pending' (registered, awaiting approval) · a real role (admin/editor/sales/viewer).
+ */
 function getUserContext() {
   var email = '';
   try { email = String(Session.getActiveUser().getEmail() || '').trim().toLowerCase(); } catch (e) {}
-  if (!email) return { email: '', role: 'anonymous' };
-  return { email: email, role: lookupRole_(email) || DEFAULT_ROLE };
+  if (!email) return { email: '', role: 'anonymous', name: '', position: '' };
+  var u = lookupUser_(email);
+  if (!u) return { email: email, role: UNREGISTERED, name: '', position: '' };
+  return { email: email, role: u.role || UNREGISTERED, name: u.name, position: u.position };
 }
 
 /** JSON for the bootstrap <script> (Code.gs sets USER_JSON). Never throws → blank/anonymous on error. */
@@ -40,20 +52,24 @@ function userContextJson_() {
   catch (e) { return JSON.stringify({ email: '', role: 'anonymous' }); }
 }
 
-/** email -> role from the _RBAC tab (active rows only). '' if absent/inactive. */
-function lookupRole_(email) {
+/** email -> { role, name, position } from the _RBAC tab (active rows only). null if absent/inactive. */
+function lookupUser_(email) {
   var sh;
-  try { sh = db_().getSheetByName(ROLES_SHEET); } catch (e) { return ''; }
-  if (!sh || sh.getLastRow() < 2) return '';
+  try { sh = db_().getSheetByName(ROLES_SHEET); } catch (e) { return null; }
+  if (!sh || sh.getLastRow() < 2) return null;
   var data = sh.getDataRange().getValues();
   var c = rbacCols_(data[0]);
-  if (c.email < 0 || c.role < 0) return '';
+  if (c.email < 0 || c.role < 0) return null;
   for (var r = 1; r < data.length; r++) {
     if (String(data[r][c.email] || '').trim().toLowerCase() !== email) continue;
-    if (c.active >= 0 && String(data[r][c.active]).toUpperCase() === 'FALSE') return '';  // deactivated
-    return String(data[r][c.role] || '').trim().toLowerCase();
+    if (c.active >= 0 && String(data[r][c.active]).toUpperCase() === 'FALSE') return null;  // deactivated
+    return {
+      role:     String(data[r][c.role] || '').trim().toLowerCase(),
+      name:     c.name     >= 0 ? String(data[r][c.name]     || '').trim() : '',
+      position: c.position >= 0 ? String(data[r][c.position] || '').trim() : ''
+    };
   }
-  return '';
+  return null;
 }
 
 /** Locate the email / role / name / active columns by header name (case-insensitive, tolerant). */
@@ -68,6 +84,66 @@ function rbacCols_(headerRow) {
     name:     find(function (s) { return s === 'name' || (s.indexOf('name') >= 0 && s.indexOf('position') < 0); }),
     active:   find(function (s) { return s === 'active' || s.indexOf('active') >= 0 || s.indexOf('enabled') >= 0 || s.indexOf('status') >= 0; })
   };
+}
+
+// ---------------------------------------------------------------------------
+// Self-registration (any signed-in user) — files a PENDING request for admin approval
+// ---------------------------------------------------------------------------
+
+/**
+ * A signed-in user registers themselves. They supply only Name + Job position; the EMAIL is taken
+ * from the Google session (never the client) and the role is FORCED to 'pending'. This is the only
+ * write a non-admin may make and it can touch ONLY the caller's own row — so there is no privilege
+ * escalation. Granting access is a separate admin step (rbacSave with a real role).
+ * Returns { ok, status: 'pending' | 'active', email, role? }.
+ */
+function registerSelf(rec) {
+  var email = '';
+  try { email = String(Session.getActiveUser().getEmail() || '').trim().toLowerCase(); } catch (e) {}
+  if (!email) throw new Error('Please sign in with your scmtechnologies.co.th account first.');
+  rec = rec || {};
+  var name     = String(rec.name || '').trim();
+  var position = String(rec.position || '').trim();
+  if (!name)     throw new Error('Please enter your name.');
+  if (!position) throw new Error('Please enter your job position.');
+
+  var u = lookupUser_(email);
+  if (u && u.role && u.role !== PENDING_ROLE) {
+    return { ok: true, status: 'active', role: u.role, email: email };   // already approved — nothing to do
+  }
+  upsertOwnPending_(email, name, position);
+  return { ok: true, status: 'pending', email: email };
+}
+
+/** Write/refresh the caller's OWN row as role='pending', active=TRUE. Used only by registerSelf. */
+function upsertOwnPending_(email, name, position) {
+  var sh = db_().getSheetByName(ROLES_SHEET);
+  if (!sh) {                                   // bootstrap the tab if an admin never ran setupRoles()
+    sh = db_().insertSheet(ROLES_SHEET);
+    sh.getRange(1, 1, 1, 5).setValues([['email', 'role', 'position', 'name', 'active']]);
+    sh.setFrozenRows(1);
+  }
+  var data = sh.getDataRange().getValues();
+  var c = rbacCols_(data[0]);
+  if (c.email < 0 || c.role < 0) throw new Error('Registration is unavailable — ask an admin to run setupRoles().');
+  // Make sure the request can carry name + position.
+  if (c.position < 0) { c.position = data[0].length; sh.getRange(1, c.position + 1).setValue('position'); data = sh.getDataRange().getValues(); c = rbacCols_(data[0]); }
+  if (c.name     < 0) { c.name     = data[0].length; sh.getRange(1, c.name + 1).setValue('name');         data = sh.getDataRange().getValues(); c = rbacCols_(data[0]); }
+
+  for (var r = 1; r < data.length; r++) {
+    if (String(data[r][c.email] || '').trim().toLowerCase() === email) {       // refresh own row
+      sh.getRange(r + 1, c.role + 1).setValue(PENDING_ROLE);
+      sh.getRange(r + 1, c.position + 1).setValue(position);
+      sh.getRange(r + 1, c.name + 1).setValue(name);
+      if (c.active >= 0) sh.getRange(r + 1, c.active + 1).setValue(true);
+      return;
+    }
+  }
+  var row = new Array(data[0].length).fill('');                                 // append new request
+  row[c.email] = email; row[c.role] = PENDING_ROLE;
+  row[c.position] = position; row[c.name] = name;
+  if (c.active >= 0) row[c.active] = true;
+  sh.appendRow(row);
 }
 
 // ---------------------------------------------------------------------------

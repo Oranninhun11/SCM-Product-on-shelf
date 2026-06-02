@@ -12,11 +12,26 @@
       </div>
       <div class="flex items-center gap-2">
         <button class="btn btn-ghost btn-icon" title="How to use" aria-label="How to use" data-nav="guide"><i data-lucide="circle-help" class="h-4 w-4"></i></button>
-        <button class="btn btn-outline btn-sm" title="Switch role">
-          <i data-lucide="user-round" class="h-4 w-4"></i>
-          <span class="hidden sm:inline">presale</span>
-          <i data-lucide="chevron-down" class="h-3.5 w-3.5 opacity-60 hidden sm:inline"></i>
-        </button>
+        <!-- User menu: signed-in identity + role, with a Sign out option. Populated by src/flows/_rbac.html. -->
+        <div class="relative" id="user-menu-wrap">
+          <button id="user-menu-btn" class="btn btn-outline btn-sm" aria-haspopup="true" aria-expanded="false" title="Account">
+            <i data-lucide="user-round" class="h-4 w-4"></i>
+            <span id="user-menu-name" class="hidden max-w-[12rem] truncate sm:inline">Account</span>
+            <span id="user-menu-role" class="badge badge-brand hidden sm:inline-flex"></span>
+            <i data-lucide="chevron-down" class="h-3.5 w-3.5 opacity-60"></i>
+          </button>
+          <div id="user-menu" class="absolute right-0 z-50 mt-2 hidden w-64 rounded-md border border-border bg-card p-1 shadow-md">
+            <div class="px-3 py-2">
+              <div id="user-menu-fullname" class="truncate text-sm font-medium text-foreground">Not signed in</div>
+              <div id="user-menu-email" class="truncate text-xs text-muted-foreground"></div>
+            </div>
+            <div class="my-1 h-px bg-border"></div>
+            <a id="user-menu-signout" href="https://accounts.google.com/Logout"
+               class="flex items-center gap-2 rounded-sm px-3 py-2 text-sm text-foreground hover:bg-accent">
+              <i data-lucide="log-out" class="h-4 w-4"></i> Sign out
+            </a>
+          </div>
+        </div>
       </div>
     </header>
 

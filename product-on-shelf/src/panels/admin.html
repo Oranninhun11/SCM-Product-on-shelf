@@ -11,6 +11,18 @@
               <span class="badge badge-secondary shrink-0">Admin &middot; _RBAC</span>
             </div>
 
+            <!-- Pending registration requests (awaiting approval) -->
+            <div id="adm-pending-wrap" class="card mt-6 border-brand-orange/40" hidden>
+              <div class="card-header">
+                <div class="card-title flex items-center gap-2">
+                  <i data-lucide="user-plus" class="h-4 w-4 text-brand-orange"></i>
+                  Pending requests <span id="adm-pending-count" class="badge badge-brand"></span>
+                </div>
+                <div class="card-desc">New staff who registered and need a role before they can use the estimator. Approve to grant access, or reject to remove the request.</div>
+              </div>
+              <div id="adm-pending" class="card-content pt-0 overflow-x-auto"></div>
+            </div>
+
             <!-- Add / update a user -->
             <div class="card mt-6">
               <div class="card-header"><div class="card-title">Add or update a user</div>

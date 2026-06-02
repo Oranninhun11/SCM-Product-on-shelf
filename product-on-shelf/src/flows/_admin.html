@@ -17,8 +17,12 @@
       var nameEl   = document.getElementById('adm-name');
       var saveBtn  = document.getElementById('adm-save');
       var refreshBtn = document.getElementById('adm-refresh');
+      var pendingEl    = document.getElementById('adm-pending');
+      var pendingWrap  = document.getElementById('adm-pending-wrap');
+      var pendingCount = document.getElementById('adm-pending-count');
       var hasServer = !!(window.google && window.google.script && google.script.run);
       var loaded = false;
+      var ROLE_OPTS = ['viewer', 'sales', 'editor', 'admin'];   // roles an admin can approve into
 
       function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (ch) {
         return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]; }); }
@@ -37,13 +41,53 @@
         if (arg === undefined) r[method](); else r[method](arg);
       }
 
+      // Notification badge on the "Users & Roles" sidebar nav item — pending count, visible app-wide.
+      function setNavBadge(n) {
+        document.querySelectorAll('[data-nav="admin"].nav-item').forEach(function (nav) {
+          var b = nav.querySelector('.adm-nav-badge');
+          if (!n) { if (b) b.remove(); return; }
+          if (!b) { b = document.createElement('span'); b.className = 'adm-nav-badge badge badge-brand ml-auto'; nav.appendChild(b); }
+          b.textContent = n;
+        });
+      }
+
+      function renderPending(pending) {
+        var n = pending.length;
+        if (pendingCount) pendingCount.textContent = n;
+        if (pendingWrap) pendingWrap.hidden = n === 0;
+        setNavBadge(n);
+        if (!pendingEl) return;
+        if (!n) { pendingEl.innerHTML = ''; return; }
+        var opts = ROLE_OPTS.map(function (r) { return '<option value="' + r + '">' + r + '</option>'; }).join('');
+        pendingEl.innerHTML =
+          '<table class="w-full text-sm"><thead><tr class="text-left text-muted-foreground">' +
+            '<th class="pb-2 pr-4 font-medium">Email</th><th class="pb-2 pr-4 font-medium">Name</th>' +
+            '<th class="pb-2 pr-4 font-medium">Job position</th><th class="pb-2 pr-4 font-medium">Grant role</th>' +
+            '<th class="pb-2 font-medium text-right">Action</th></tr></thead><tbody>' +
+          pending.map(function (u) {
+            return '<tr class="border-t border-border">' +
+              '<td class="py-2 pr-4">' + esc(u.email) + '</td>' +
+              '<td class="py-2 pr-4">' + esc(u.name || '—') + '</td>' +
+              '<td class="py-2 pr-4">' + esc(u.position || '—') + '</td>' +
+              '<td class="py-2 pr-4"><select class="select py-1 h-8 text-xs" data-prole="' + esc(u.email) + '">' + opts + '</select></td>' +
+              '<td class="py-2 text-right whitespace-nowrap">' +
+                '<button class="btn btn-primary btn-sm" data-approve="' + esc(u.email) + '">Approve</button> ' +
+                '<button class="btn btn-ghost btn-sm text-brand-orange" data-reject="' + esc(u.email) + '">Reject</button>' +
+              '</td></tr>';
+          }).join('') + '</tbody></table>';
+      }
+
       function render(data) {
         if (!data || !data.ok) {
           tableEl.innerHTML = '';
+          renderPending([]);
           setStatus((data && data.error) || 'Could not load _RBAC.', 'err');
           return;
         }
-        var rowsHtml = data.users.map(function (u) {
+        var pending = data.users.filter(function (u) { return String(u.role).toLowerCase() === 'pending'; });
+        var active  = data.users.filter(function (u) { return String(u.role).toLowerCase() !== 'pending'; });
+        renderPending(pending);
+        var rowsHtml = active.map(function (u) {
           var roleBadge = '<span class="badge badge-brand">' + esc(u.role) + '</span>';
           var active = data.hasActive ? (u.active ? 'Yes' : '<span class="text-muted-foreground">No</span>') : '—';
           return '<tr class="border-t border-border">' +
@@ -64,7 +108,7 @@
             (data.hasName ? '<th class="pb-2 pr-4 font-medium">Name</th>' : '') +
             '<th class="pb-2 pr-4 font-medium">Active</th><th class="pb-2 font-medium text-right">Actions</th>' +
           '</tr></thead><tbody>' + (rowsHtml || '<tr><td class="py-3 text-muted-foreground" colspan="6">No users yet.</td></tr>') + '</tbody></table>';
-        setStatus(data.users.length + ' user' + (data.users.length === 1 ? '' : 's') + '.');
+        setStatus(active.length + ' active user' + (active.length === 1 ? '' : 's') + '.');
       }
 
       function load() { run('rbacList', undefined, function (res) { loaded = true; render(res); }); }
@@ -79,6 +123,25 @@
       });
 
       refreshBtn.addEventListener('click', load);
+
+      // Pending requests → Approve (grant the chosen role) or Reject (remove the request).
+      if (pendingEl) pendingEl.addEventListener('click', function (e) {
+        var ap = e.target.closest('[data-approve]');
+        if (ap) {
+          var email = ap.getAttribute('data-approve');
+          var sel = pendingEl.querySelector('[data-prole="' + email + '"]');   // quoted value → no escaping needed (emails have no ")
+          var role = sel ? sel.value : 'viewer';
+          run('rbacSave', { email: email, role: role }, function (res) {
+            render(res); if (res && res.ok) setStatus('Approved ' + email + ' as ' + role + '.');
+          });
+          return;
+        }
+        var rj = e.target.closest('[data-reject]');
+        if (rj) {
+          var rEmail = rj.getAttribute('data-reject');
+          if (window.confirm('Reject and remove the request from ' + rEmail + '?')) run('rbacRemove', rEmail, render);
+        }
+      });
 
       // Edit → fill the form; Remove → confirm then delete (delegated, table is re-rendered).
       tableEl.addEventListener('click', function (e) {
@@ -103,6 +166,8 @@
         var nav = e.target.closest('[data-nav="admin"]');
         if (nav && !loaded) setTimeout(load, 0);
       });
-      if (!view.hasAttribute('hidden')) load();
+      // Admins: load once on startup so the pending-request count badge shows on the nav app-wide.
+      var amAdmin = String((window.USER && window.USER.role) || '').toLowerCase() === 'admin';
+      if (!view.hasAttribute('hidden') || (hasServer && amAdmin)) load();
     })();
   </script>
