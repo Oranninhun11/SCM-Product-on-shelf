@@ -989,3 +989,244 @@ blanks need mapping. Then git-commit the pushed `Ingest_Email.gs` edits.
 > `scheduleDailyAttachmentSweep()` (post ~14:00 Thai 06-02), read the live DB back to confirm xlsx
 > firewall/HCI/server prices landed + list new `_alias` blanks to map; then git-commit the pushed
 > `Ingest_Email.gs` edits (guard + Option B).
+
+### Progress update — 2026-06-02 ~14:15 ICT
+- ✅ **Committed + pushed.** Guard + Option B committed (`58f092d`), **rebased onto remote** (2 `Update README.md`
+  commits) → `ef5124d`, **pushed** to GitHub. Branch in sync (ahead 0/behind 0). Scoped to `product-on-shelf/`
+  only — SCM files (`.claude/`, `CLAUDE.md`, `CLIENT_TRACKER.md`) stayed untracked.
+- ✅ **Remote renamed + URL fixed.** GitHub repo `SCM_Product_on_shelf` → **`SCM-Product-on-shelf`** (underscore→
+  hyphen); `git remote set-url enter https://github.com/Oranninhun11/SCM-Product-on-shelf.git` done (fetch verified, no redirect).
+- ⏳ **`fetchAttachmentQuotes()` was RUN** by Oran ~14:14 ICT (quota reset 00:14 PDT — fresh). **Result PENDING:**
+  the DB Drive-export still shows the pre-run state (Price 51/26 switch+server, no `attach` row in `_sync_log`,
+  0 provisional) — normal export caching lag. Awaiting the editor Logger line `Attachment sweep (12m): scanned N,
+  upserted M (provisional P), skipped S` to confirm whether xlsx firewall/HCI/server prices landed. `scheduleDailyAttachmentSweep()` not yet confirmed run.
+- This `_handoff.md` edit is uncommitted (the code is committed; the doc-only delta can ride the next commit).
+
+> Resume (updated): `/oran-software-engineer` on `product-on-shelf-app` — get the `fetchAttachmentQuotes()`
+> Logger line (or re-read the live DB once the export refreshes): `upserted>0` → list new firewall/HCI/server
+> SKUs + `_alias` blanks to curate; `scanned>0/upserted0` → debug `extractPricedRows_`/Drive xlsx read. Then
+> confirm `scheduleDailyAttachmentSweep()` is installed.
+
+---
+
+# Handoff — Product on Shelf (cont.)
+_Session: 2026-06-02 evening · software-engineer mode · configured-bundle price lists + uniform impl/support toggles_
+
+## Stage
+Price-list UX rework. The generic price-list engine (`src/flows/_pricelist.html`) now supports
+**configured-bundle models** and **uniform Implementation/Support toggles**. All committed +
+pushed to Apps Script `@HEAD` (NOT pushed to GitHub). Ingestion untouched this session.
+
+## What shipped (3 commits, all `@HEAD`-pushed, NOT on GitHub)
+- **`f78ff3d` — configured-bundle price lists (switch + firewall).** New `bundleCatalog` mode: a model is a
+  bundle of role-tagged component SKUs (`device`/`dna`/`support`/`addon`); headline = MERGED price; a
+  read-only **"View SKU detail"** BoM expander lists every part. The engine KEEPS the curated model list in
+  code and uses ingested `window.PRICING[view].pricelist` only as a **part#→price source** (`priceMap`/`priceOf`),
+  so DNA/PSU/optics/cables/FortiGuard stay INSIDE the bundle instead of each becoming a selectable model
+  (that was Oran's screenshot bug). Per-model tier + add-on controls rebuilt on model change via **event
+  delegation** (`cfg-tier`/`cfg-addons` `display:contents` wrappers). Switch = curated **C9300 / C9200L / C1300**
+  chassis bundles. Firewall **Price-list tab migrated onto the generic engine** (FG-90G/120G/200G; FortiGuard
+  UTP/ATP/Enterprise tier + FortiCare support + FortiAnalyzer/FortiManager add-ons); sizing tabs unchanged.
+  `ReadPath.gs` now maps the `firewall` category. `fwlist.html` is now **dead** (markup gone → self-disables).
+- **`2b1c3a8` — Impl/Support toggles on ALL hardware price lists** (ungated the `componentToggles` flag).
+- **`5b59668` — Impl/Support toggles on software too** (no site prep/SLA/RMA; services row relabeled
+  "Implementation"; support stays bundled/zero-cost label).
+
+## Verified
+jsdom harness `/tmp/pos_test.js` (uses `/tmp/node_modules/jsdom`) — ALL PASS (~38 assertions) incl. a
+**second DOM with simulated ingested `window.PRICING`** proving raw SKUs group away + live prices feed
+components. Can't paint the CDN shell headless, so jsdom drives the engines directly. `node --check` + `build.py` clean.
+
+## Open / blockers
+- 🟡 **FortiGuard/FortiCare bundle SKUs are MOCK-format** (`FC-10-F0xxG-…-DD`, `FAZ-150G`, `FMG-200G`) — align to
+  real ingested part#s when firewall xlsx quotes land (component match is **exact uppercase part#**; misses → mock,
+  shown in the detail expander). Switch PSU already aligned to ingested `PWR-C1-1100WAC`.
+- 🟡 **Software support is zero-cost** (bundled) — toggle hides the line but doesn't change price. Offered to wire a
+  real SA/maintenance cost if Oran gives the basis.
+- 🔴 **Uncommitted PRIOR-session RBAC stack in the working tree — NOT authored/reviewed this session, left OUT of
+  all commits**: `Auth.gs` (+485), `src/flows/_rbac.html` (+365), `src/flows/_admin.html`, `src/panels/admin.html`,
+  `src/01_shell_top.html`. Intact on disk; Oran to review + commit separately.
+- ⚪ `fwlist.html` committed in its inert state; `componentToggles` flag now a harmless no-op — offered a cleanup pass.
+- ⚪ Ingestion item from prior handoff still open: confirm `fetchAttachmentQuotes()` landed firewall/HCI/server xlsx prices.
+
+## Next concrete step
+Oran's open question: convert **Server / Storage / HCI** into configured bundles (same pattern) — larger curation step.
+OR align the firewall mock SKUs to real ingested part#s. OR review+commit the RBAC stack.
+
+## Suggested skills
+- **`/oran-software-engineer`** — verify with the jsdom harness pattern (load `/tmp/pos_preview.html`, drive
+  `[data-pricelist]` controls, assert totals); `tools/push.sh` ships `@HEAD`.
+
+## Artifacts produced this session
+- `src/flows/_pricelist.html` (bundle engine + priceMap/priceOf + uniform toggles) · `src/panels/firewall.html`
+  (generic mount) · `src/flows/fwlist.html` (now inert) · `ReadPath.gs` (firewall category) · `index.html` rebuilt
+  (manifest unchanged → no git diff). Throwaway: `/tmp/pos_test.js`, `/tmp/pos_preview.html`.
+
+## Decisions (the why)
+- **Curated bundle catalog, NOT auto-grouping the ingested flat list** (Oran's pick) — the flat `Price` tab lost the
+  quote's grouping; curated templates define structure, ingested prices fill components by part#. Raw SKUs never models.
+- **Firewall Price-list migrated to the ONE generic engine** (not a 2nd copy in fwlist.html) — single engine to
+  maintain; the bundle treatment is the same code path as switch.
+- **Toggles ungated** for all hardware + software (software omits site/SLA/RMA by nature); left the now-unused
+  `componentToggles` flag to avoid churn.
+
+> Resume: `/oran-software-engineer` on `product-on-shelf-app` — next is Server/Storage/HCI bundle conversion
+> (Oran's pending choice), or align firewall mock SKUs to real ingested part#s. Verify via `/tmp/pos_test.js`
+> jsdom harness. ⚠️ Leave the uncommitted RBAC stack (Auth.gs/_rbac/_admin/admin/01_shell_top) for Oran to review.
+
+---
+
+# Handoff — Product on Shelf (cont.)
+_Session: 2026-06-02 evening · software-engineer mode · custom email+password auth + RBAC capabilities_
+
+## Stage
+**Auth pivot DONE.** Replaced Google-session identity with a **custom email+password** system on top of
+the @scm Google sign-in gate. Committed (`fe14a03`), **pushed** to GitHub, and **live in prod** — prod
+deployment `AKfycbxMT6TI…` redeployed `@4`→**`@17`** across this session (same `/exec` URL). Login works
+for Oran; only the email (forgot-password) path is gated on a scope reauth.
+
+## What got built (all on `product-on-shelf-app`, one commit `fe14a03`)
+Iterated live with Oran (each step: edit `src/`→`tools/push.sh`→`clasp deploy` redeploy prod):
+- **Login** = username only + fixed `@scmtechnologies.co.th` suffix (full email accepted too); **Register**
+  keeps full email → role `pending`. **Forgot password** → 6-digit email OTP (10-min, 5-try, `MailApp`),
+  then reset. **Sessions** = token in `localStorage`, server `validateSession` (CacheService ~6h,
+  re-validated on every privileged call). **Soft Sign out** = back to login, NO Google logout.
+- **Passwords**: SHA-256 + per-user salt (`salt$hash`); also **accepts a plaintext password typed
+  straight into the `_RBAC` sheet** and **upgrades it to a hash on first login** (this fixed Oran's "can't
+  login" — he'd set plaintext).
+- **RBAC capabilities** (Oran's spec): **viewer = read-only**, **sales = build+download estimates**,
+  **admin = full**; **`editor` role removed**. Enforced by **deny-by-default CSS** in `00_head.html`
+  (`html:not([data-can-estimate])` hides `[data-select]` add-to-estimate / `#est-quote` download /
+  `[data-nav="custom"]` cart); `_rbac.html applyRole()` sets `data-can-estimate` for admin+sales only.
+- **Admin Users & Roles**: pending-requests approve(assign role)/reject, **password set/reset field**,
+  **duplicate-email confirm guard**; every `rbac*` call **token-guarded server-side** (`requireAdmin_(token)`).
+- **Privacy fix** (Oran's catch): **stopped injecting the Google identity** (`window.USER`) into the page
+  and removed all prefill — login/register fields start **blank**, so no one sees another user's name/email.
+  Dropped the `USER_JSON` bootstrap from `Code.gs`/`build.py`.
+
+## Open / Oran's manual steps (Claude can't run GAS / reauthorize)
+- 🔴 **`script.send_mail` reauth REQUIRED** for forgot-password email. In the editor add+run
+  `function testReset(){ requestPasswordReset('oran.nin@scmtechnologies.co.th'); }`, **approve the new
+  "send email" permission**, confirm the code arrives, delete the wrapper. Until then "Send code" errors.
+- 🔴 **After the scope change, re-check Triggers** — a scope add can suspend time-driven triggers;
+  if the daily attachment sweep vanished, re-run `scheduleDailyAttachmentSweep()` (don't let ingestion stall).
+- 🟡 **Bootstrap done** (login works): `setupRoles()` + `setAdminPassword('…')`. `_RBAC` now has a
+  `password` column; Oran's row upgraded to a hash on login.
+- 🟡 **Legacy `editor` users** (if any) now behave **read-only** (deny-by-default) — reassign to sales/viewer.
+- 🟡 **Sheet-based passwords** are weaker than SSO: no brute-force lockout beyond OTP 5-try/10-min.
+  Offered per-email send throttling + a `dedupeRoles()` editor fn (manual sheet dup rows aren't app-prevented) — not built.
+- ⚪ Deployment unchanged: `executeAs USER_DEPLOYING` + `access DOMAIN` (kept the Google outer gate); no
+  manifest scope pinned (auto-detected) — that's why send_mail triggers a reauth.
+
+## Next concrete step
+Oran reauthorizes `script.send_mail` (run `testReset`, approve) → verify forgot-password emails + the daily
+trigger survived. Then this feature set is fully functional. After that, back to the parked product work
+(Server/Storage/HCI bundle conversion, or align firewall mock SKUs to real ingested part#s).
+
+## Suggested skills
+- **`/oran-software-engineer`** on `product-on-shelf-app`. Verify: `node --check` on extracted `<script>`/`.gs`,
+  node logic harness for hash/verify/login-state, `python3 build.py [--preview]`, `tools/push.sh` (@HEAD),
+  `clasp deploy --deploymentId AKfycbxMT6TI… --description …` to redeploy prod. Read live DB back via Drive
+  MCP (note: **`_RBAC` tab is NOT in the Drive export** — can't inspect it that way; can't run GAS).
+
+## Artifacts (commit `fe14a03`, all under `product-on-shelf/`)
+- `Auth.gs` (rewritten: login/register/sessions/OTP/RBAC), `Code.gs` + `build.py` (drop `window.USER`),
+  `src/00_head.html` (capability CSS), `src/01_shell_top.html` (user menu), `src/flows/_rbac.html`
+  (login/register/forgot/pending gate), `src/flows/_admin.html` + `src/panels/admin.html` (approval +
+  password + dup guard), `index.html` (rebuilt). `_handoff.md` (this) left uncommitted, as before.
+
+## Decisions (the why)
+- **Custom email+password, keep Google as outer gate** (Oran's pick over pure-SSO or open-access) — domain
+  sign-in still restricts to @scm; the app identity is the session token, not the Google session.
+- **Token-guarded admin calls** — "Execute as: Me" means the server can't trust the Google session for the
+  *caller's* role, so `requireAdmin_` validates the session **token**, not `getActiveUser()`.
+- **Accept+upgrade plaintext sheet password** — lets admins set passwords by hand in the sheet, then hashes
+  on first login. Pragmatic for an internal tool; fixed the real "can't login" cause.
+- **Deny-by-default capability CSS** keyed on `data-can-estimate` (not per-role rules) — viewers AND any
+  unknown/legacy role are read-only automatically; only admin/sales get actions.
+- **No identity injection** — `window.USER` removed from page source entirely (privacy: don't expose who set
+  up / is using the app); fields blank, no prefill.
+- **No account-switch in-app** (removed earlier) — Apps Script can't switch Google account without a full
+  Google logout; use Incognito to test other accounts.
+
+## References
+- `reference_product_on_shelf_deploy.md` (clasp v3, @HEAD loop, prod deploy id) · live DB `1kzKWvaJN7z7…`
+  (`_RBAC` tab) · `DB_SCHEMA.md`. Prior auth design notes earlier in this file.
+
+> Resume: `/oran-software-engineer` on `product-on-shelf-app` — confirm Oran reauthorized `script.send_mail`
+> (forgot-password emails) + the daily trigger survived; then resume parked product work. `_handoff.md` edit
+> is uncommitted (doc-only; rides the next commit).
+
+---
+
+# Handoff — Product on Shelf (cont.)
+_Session: 2026-06-03 (~01:00 ICT) · software-engineer mode · ingestion-state Q&A + README data-flow doc_
+
+## Stage
+No code/ingestion logic changed this session. Read the live DB back to answer Oran's questions about
+the scheduled mail fetch, then **documented the end-to-end price data flow in the top-level
+`README.md`** (Oran's explicit ask: "remember this flow up to github readme"). RBAC/auth unchanged
+(prior `fe14a03`); `script.send_mail` reauth still outstanding.
+
+## What I verified by reading the live DB (`1kzKWvaJN7z7…`, via Drive MCP — read-only)
+- **Scheduled fetch WORKS.** `_sync_log` last row: `2026-06-02 16:34→16:37 | mode=attach | scanned 335,
+  upserted 233, provisional 4, skipped 0, ok`. The 16:34 timing matches the **16:00 Asia/Bangkok daily
+  attach trigger** → strong evidence the scheduled sweep fired (not just a manual run). Daily `daily`-mode
+  row also present at 06-02 02:57 (ok).
+- **No 06-03 rows yet is normal** — checked clock: it was 00:52 ICT 06-03, before both today's triggers
+  (`daily` ~02:57, `attach` 16:00). Re-read after 16:00 ICT 06-03 to confirm today's attach run fired.
+- **What the 06-02 attach run actually was: a Cisco SWITCH quote**, not the firewall/HCI/server xlsx we
+  want. The 18 newly-blank `_alias` rows (all dated 2026-06-02) are Cisco DNA-lic / CON-SNT / PSU / SFP /
+  chassis parts. **Firewall / HCI / server prices are STILL not in `Price`.**
+- ⚠️ **The Drive natural-language export is STALE/truncated for the `Price` tab** — it renders only ~146
+  rows (all `switch`+2 `server`, the pre-attach state); the 233-row attach write (incl. the 4 `unknown:`
+  provisional rows) is NOT in the export. Two identical fetches confirmed the cache. So the 4 provisional
+  SKUs could not be read directly — but they're the **priced subset of the 18 `_alias` blanks** below.
+
+## The 18 uncurated `_alias` blanks from the 06-02 attach run (the curation surface)
+All Cisco, all `unmatched 2026-06-02`. Proposed mappings (8 clean; **not yet added to `ALIAS_SEED`**):
+- `C9300-DNA-E-24-1R`→`switch:cisco:c9300-dna-e-24` · `C9300L-DNA-E-24-1R`→`switch:cisco:c9300l-dna-e-24`
+- `C9200L-48P-4X-E`→`switch:cisco:c9200l-48p-4x-e` · `PWR-C1-715WAC-P/2`→`switch:cisco:pwr-c1-715wac`
+- `PWR-C5-1KWAC/2`→`switch:cisco:pwr-c5-1kwac` · `CAB-SPWR-150CM`→`switch:cisco:cab-spwr-150cm`
+- `SFP-10G-LR-S`→`cabling:cisco:sfp-10g-lr-s` · `SFP-10G-T-X`→`cabling:cisco:sfp-10g-t-x` (SFP→cabling rule)
+- **10× `CON-SNT-*`** SmartNet contracts (AIRCTRTK/ARAP28KS/C9120AXS/C93002TE/C9300L2X/CBS35G4U/CS910AXI/
+  WSC224SL/WSC248TS/C9200L4X): per the EXISTING `ALIAS_SEED` convention (lines 307–318) these map to their
+  **parent device** sku_key as `support_yr` — but the compressed codes need decoding; some (AIRCT/AP codes)
+  reference wireless devices not yet in the catalog. Left undecided — Oran to confirm decode before I add them.
+
+## Open questions / blockers
+- 🔴 **`script.send_mail` reauth** still outstanding (forgot-password email) — unchanged from prior section.
+- 🔴 **Firewall/HCI/server xlsx prices not yet in `Price`** — the 16:00 sweep should pull them if those
+  quotes are from a distributor domain w/ xlsx attachments; confirm after the next sweep.
+- 🟡 **18 `_alias` blanks** need curation (8 mapping proposals ready above; 10 CON-SNT need decode sign-off).
+- 🟡 Drive export caches/truncates the big `Price` tab — to inspect provisional/`unknown:` rows directly,
+  filter the live sheet by `sku_key` containing `unknown:` (can't be read from the cached export).
+
+## Next concrete step
+After 16:00 ICT 06-03, read the live DB back: confirm the 06-03 `attach` row fired and report which
+firewall/HCI/server (or new) SKUs landed + new `_alias` blanks. Then curate (`ALIAS_SEED` + `seedAliases()`).
+
+## Suggested skills
+- **`/oran-software-engineer`** on `product-on-shelf-app`. Verify by reading the live sheet back via Drive
+  MCP (note: export caches + truncates `Price`; `_RBAC` not exported); can't run GAS.
+
+## Artifacts produced this session
+- `README.md` (top-level / GitHub landing page) — **new "Price data flow (Gmail → DB → app)" section**
+  (ASCII diagram + file-role table + `_alias` gate explanation); updated stale "not yet built" line;
+  added `Ingest_Email.gs`/`ReadPath.gs`/`Auth.gs`/`Setup.gs` to the Files table.
+- `product-on-shelf/_handoff.md` — this section.
+- Memory: `reference_pos_data_flow.md` (pointer to the README flow + the 5-file pipeline).
+
+## Decisions (the why)
+- **Documented the flow in the top-level `README.md`** (not the `product-on-shelf/README.md`) — that's the
+  repo landing page Oran reads on GitHub; the request was to make it re-readable there.
+- **Did NOT add the 18 mappings to `ALIAS_SEED` yet** — 8 are clean but the 10 CON-SNT contracts need
+  Oran's parent-device decode; batching avoids a half-curated push.
+
+## References
+- Live DB `1kzKWvaJN7z7wdcYjbcZHYXZpFfIxsqFyBDg8Ysxs7kY` (`Price`/`_sync_log`/`_alias`) · `Ingest_Email.gs`
+  (`ALIAS_SEED` 292, `_alias` gate 520, provisional 524–529, `seedAliases` 405) · `DB_SCHEMA.md`.
+
+> Resume: `/oran-software-engineer` on `product-on-shelf-app` — after 16:00 ICT 06-03 read the live DB back
+> (confirm today's `attach` run + new SKUs/`_alias` blanks); curate the 18 blanks into `ALIAS_SEED`
+> (8 ready, 10 CON-SNT pending decode) → `seedAliases()`. `script.send_mail` reauth still pending.

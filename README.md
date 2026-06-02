@@ -23,6 +23,50 @@ Every option card has an **Add to estimate** button that feeds a shared **Custom
 deal can be bundled into a single quote. Any unbuilt project renders a "coming soon" placeholder via
 the `data-soon` filler.
 
+### Price data flow (Gmail → DB → app)
+
+Prices are **not hand-entered** — they are ingested from distributor quote emails and read back into
+the app at page load. Five Apps Script (`.gs`) files, one job each:
+
+```
+  GMAIL  (vendor price emails — inline HTML tables + xlsx attachments)
+        │   ① FETCH    daily + 16:00 Asia/Bangkok scheduled triggers
+        ▼
+  Ingest_Email.gs   ← THE FETCHER
+        │              reads Gmail · parses HTML tables + xlsx · maps each
+        │   ② WRITE    part# → sku_key via the _alias gate · upserts into the DB
+        ▼
+  DB Google Sheet   ← the "Price" tab (canonical price store, append-with-history)
+        │   ③ READ
+        ▼
+  ReadPath.gs       ← THE READER: reads "Price", builds per-product window.PRICING
+        │   ④ INJECT  on page load
+        ▼
+  Code.gs  doGet()  ← serves the web page, injects window.PRICING into index.html
+        │   ⑤ DISPLAY
+        ▼
+  src/flows/_pricelist.html  ← the price-list page the user sees;
+                               reads window.PRICING (mock fallback if no live price yet)
+```
+
+| Job | File |
+|-----|------|
+| **Fetch** prices from Gmail (email + xlsx) | `Ingest_Email.gs` |
+| Store fetched prices | DB Sheet → `Price` tab |
+| **Read** the DB, feed the app | `ReadPath.gs` |
+| Serve the page + inject prices | `Code.gs` (`doGet`) |
+| **Display** the price list | `src/flows/_pricelist.html` |
+| Login / roles (RBAC) | `Auth.gs` |
+| One-time DB setup | `Setup.gs` |
+
+**The `_alias` gate.** `_alias` is a 3-column tab (`raw_string | sku_key | note`) that translates the
+messy part numbers in vendor emails into the app's canonical `sku_key` (`category:vendor:model`).
+Ingestion writes a price into `Price` **only if** the part# is mapped in `_alias`; unmapped parts are
+queued **blank** in `_alias` for curation (and are never shown as a price — that's how junk is kept out).
+A priced-but-unmapped part is parked under an `unknown:unknown:*` key (kept, but hidden from the app).
+To curate: add `[raw_string, sku_key, note]` rows to `ALIAS_SEED` in `Ingest_Email.gs`, run
+`seedAliases()` (fills the blanks, idempotent), then re-run the relevant fetch to price them.
+
 ### Editing — source layout & build
 
 The `src/` partials are pushed to Apps Script as **separate files** (each `src/*.html` shows as
@@ -157,7 +201,9 @@ base64-inlined in `00_head.html` — edit that file surgically.
   view lists every line with remove / clear and a running grand total; the sidebar shows a live
   item-count badge.
 
-Not yet built: the data integrations (Google Chat webhook, email price-pull, Google Sheet lookup).
+Data integrations: the **email price-pull + Google Sheet price store are live** (see *Price data flow*
+above) — `Ingest_Email.gs` fetches on a schedule, `ReadPath.gs` feeds `window.PRICING`. The Google Chat
+webhook is an optional notify-only side branch.
 
 ## Pricing seams (integration hand-off)
 
@@ -186,7 +232,11 @@ When the real source lands, replace each function's inputs with data fetched ser
 | `index.html` | Generated include-manifest: `<?!= include('src/…') ?>` lines that stitch the partials together. Served as a template. **Do not edit — regenerate via `build.py`.** |
 | `src/**/*.html` | The editable source, split by concern. Each is pushed as its own Apps Script file (`src/panels/home`, `src/flows/hci`, …). |
 | `logo.png` | SCM B2B org logo (source of truth). Inlined as base64 into `src/00_head.html` so it works in HTML Service too. |
-| `Code.gs` | Apps Script entry point — `doGet()` evaluates the `index` template; `include()` inlines each partial. |
+| `Code.gs` | Apps Script entry point — `doGet()` evaluates the `index` template, injects `window.PRICING`; `include()` inlines each partial. |
+| `Ingest_Email.gs` | Email/xlsx price **fetcher** — scheduled Gmail pull, HTML+xlsx parse, `_alias` map, upsert into the `Price` tab. The `ALIAS_SEED` curation list lives here. |
+| `ReadPath.gs` | DB **reader** — reads the `Price` tab and builds the per-product `window.PRICING` model the page consumes. |
+| `Auth.gs` | Email+password login, sessions/OTP, and RBAC (viewer / sales / admin) on top of the Workspace sign-in gate. |
+| `Setup.gs` | One-time DB bootstrap (`setupDatabase()`), schema/roles setup helpers. |
 | `appsscript.json` | Manifest. Web app, `access: DOMAIN` (Workspace-internal), timezone Asia/Bangkok. |
 | `.clasp.json.example` | Template for the clasp config created at deploy time. |
 
