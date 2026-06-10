@@ -1394,3 +1394,28 @@ the prices land. Then commit the parser fix (and strip the probe).
 > Resume: `/oran-software-engineer` on `product-on-shelf-app` — get Oran's per-unit-vs-as-is call on the
 > Nutanix totals, curate the new `_alias` blanks (Nutanix/Kaspersky/Fortinet) into `ALIAS_SEED` →
 > `seedAliases()` → re-run `fetchAttachmentQuotes()`; then commit the parser fix + strip `probeXlsxLayout`/`_probe`.
+
+---
+
+# Handoff — Product on Shelf (cont.)
+_Session: 2026-06-10 · software-engineer mode · 10-min cleanup sprint_
+
+## What happened (supersedes stale items in the 06-04 section)
+- **Nutanix price-basis decision is RESOLVED IN CODE** (was logged as pending): the working tree already
+  carried per-unit ÷ qty logic (`opts.lineTotals`, `qty_basis` flag — unit prices never divided) + the
+  `NX-8170-G10`/`SW-NCI-PRO-AP` aliases. Discovered while reading the uncommitted diff.
+- **Added the 8 ready Cisco mappings** from 06-03 to `ALIAS_SEED`: `C9200L-48P-4X-E`,
+  `C9300-DNA-E-24-1R`, `C9300L-DNA-E-24-1R`, `PWR-C1-715WAC-P/2`, `PWR-C5-1KWAC/2`, `CAB-SPWR-150CM`,
+  `SFP-10G-LR-S`, `SFP-10G-T-X` (SFPs → `cabling:`).
+- **Stripped throwaway `probeXlsxLayout()`/`PROBE_QUERY`** (the `_probe` tab in the DB sheet still needs manual delete).
+- Verified (`node --check`, grep), **pushed `@HEAD`** (13:11), **committed `a982b3f`** (parser fix +
+  qty-basis + bundle price lists + aliases, scoped to product-on-shelf/), **pushed to GitHub**.
+
+## Still open (Oran's GAS steps)
+- 🔴 Run `seedAliases()` (fills the new mappings incl. Nutanix) → `fetchAttachmentQuotes()` to price them.
+- 🟡 10 `CON-SNT-*` SmartNet codes still need parent-device decode; Kaspersky `KL40664…` + Fortinet
+  `FC-10-…` blanks still unmapped (need exact part#s from `_alias` readback).
+- 🟡 Eyeball Server/HCI · Standalone Server · Storage bundle price lists on `/dev` → then prod redeploy (`@17`).
+- 🟡 `script.send_mail` reauth (forgot-password email). Delete the `_probe` tab.
+
+> Resume: read live DB back (6+ days of sweeps accumulated), curate new `_alias` blanks, prod redeploy after eyeball.
