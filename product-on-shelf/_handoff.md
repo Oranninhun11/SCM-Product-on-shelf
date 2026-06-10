@@ -1419,3 +1419,59 @@ _Session: 2026-06-10 · software-engineer mode · 10-min cleanup sprint_
 - 🟡 `script.send_mail` reauth (forgot-password email). Delete the `_probe` tab.
 
 > Resume: read live DB back (6+ days of sweeps accumulated), curate new `_alias` blanks, prod redeploy after eyeball.
+
+---
+
+# Handoff — Product on Shelf (cont.)
+_Session: 2026-06-10 (later, same day) · software-engineer mode · seed/fetch verification BLOCKED on export cache_
+
+## Stage
+Oran ran `seedAliases()` + `fetchAttachmentQuotes()` (~13:17 ICT) after the 13:11 push that added the
+Nutanix + 8 Cisco mappings. **Result UNVERIFIED** — the Drive content export serves a stale cache
+(pre-run snapshot) and Claude could not confirm the writes before the session ended.
+
+## Where we left off
+- Sheet `modifiedTime` = **13:17:06 ICT** → his runs DID write something. But two xlsx exports pulled
+  5 min apart are **byte-identical pre-run state**: 29 `_alias` blanks (NX-8170-G10 etc. still blank in
+  the export), no new `_sync_log` row after the 02:57 daily, Price = 89 active (no hci), `_probe` still present.
+- ⚠️ **Timing risk flagged to Oran**: if his `seedAliases()` ran against code older than the 13:11 push,
+  it filled nothing new → re-run `seedAliases()` + `fetchAttachmentQuotes()`.
+- **Added + pushed + committed 2 more mappings** (`AT-SP10TW3-NCA1`, `AT-QSFP1CU-NCA1` → parent-device
+  `support_yr`, from the 06-10 02:57 daily run's new blanks). Pushed `@HEAD` 13:17:07 — AFTER his seed run,
+  so these two **need one more `seedAliases()`** regardless.
+
+## Pre-run baseline (from the cached export — compare next readback against this)
+- `Price`: 333 total / **89 active** — switch 50, unknown 29 (provisional), backup 5, firewall 3, server 1, endpoint 1. All `qty_basis=per_unit`.
+- `_alias`: 115 rows / **29 blanks** (list incl. NX-8170-G10, SW-NCI-PRO-AP, 5× Kaspersky KL40664*, 2× FC-10-*, 10× CON-SNT-*, 2× AT-*-NCA1).
+- `_sync_log` last row: 06-10 02:57 daily, scanned 81 / upserted 7 / superseded 1, ok. 16:00 attach sweeps healthy all week (scans ~330-348, upserted 0).
+
+## Expected when verified (success criteria)
+- `_alias`: NX-8170-G10 / SW-NCI-PRO-AP / 8 Cisco rows filled → blanks drop 29 → ~19 (then 17 after AT re-seed).
+- `Price`: new `hci:nutanix:*` rows — NX-8170-G10 ~3.6M/node (18M ÷ qty 5), nci-pro ~18.2k/core, `qty_basis=per_unit`.
+- `_sync_log`: an `attach`-mode row ~13:17 with upserted > 0.
+
+## Open / blockers
+- 🔴 **Verify the runs**: either Oran pastes the editor Logger lines (`seedAliases: filled N…` /
+  `Attachment sweep (12m): scanned N, upserted M…`), or re-pull the export after 15+ min and diff vs the baseline above.
+- 🟡 One more `seedAliases()` + `fetchAttachmentQuotes()` for the 2 AT-NCA1 mappings.
+- 🟡 Still unmapped: 10 `CON-SNT-*` (need Oran's parent-device decode), 5 Kaspersky `KL40664*`, 2 Fortinet `FC-10-*`
+  (note: FC-10-0081F/GT71G look like duplicates of the already-mapped `FTN-*` FortiCloud parts — check before mapping).
+- 🟡 29 provisional `unknown:*` Price rows — clean up once their parts get mapped.
+- 🟡 `_probe` tab still in the DB sheet — Oran to delete (code already stripped).
+- ⚪ Carryovers: `/dev` eyeball → prod redeploy (`@17`); `script.send_mail` reauth.
+
+## Next concrete step
+Confirm the seed/fetch wrote (Logger lines or fresh export diff vs baseline). If `_alias` still blank after a
+confirmed post-13:11 `seedAliases()` run → hunt a real `seedAliases` bug. Then curate the remaining blanks.
+
+## Artifacts this session
+- Commits `a982b3f` (parser+bundles+8 aliases, probe stripped), `75fef91` (handoff), + AT-NCA1 alias commit — all pushed to GitHub + Apps Script `@HEAD`.
+- Throwaway: `/tmp/db_live*.xlsx`, `/tmp/db_export.txt` (cached-export readbacks).
+
+## Decisions (the why)
+- **Trust `modifiedTime` over the content export** — metadata is fresh, content export can lag 10-15+ min (third documented occurrence of this cache).
+- **Mapped the 2 new AT-NCA1 parts immediately** — parent devices already in ALIAS_SEED; same Net.Cover→support_yr convention, zero ambiguity.
+
+> Resume: `/oran-software-engineer` on `product-on-shelf-app` — re-pull the DB export, diff vs the
+> baseline above; confirm hci prices + filled aliases; re-run `seedAliases()`+`fetchAttachmentQuotes()`
+> if the seed predated 13:11. Then curate CON-SNT/Kaspersky/FC-10 blanks.
