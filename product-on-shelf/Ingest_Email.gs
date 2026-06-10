@@ -497,7 +497,7 @@ function runIngest_(query, mode, opts) {
   var t0 = Date.now();
   var ss = db_();
   var run = { run_id: 'em-' + nowIso_(), started_at: nowIso_(), src_system: 'email', mode: mode,
-              scanned: 0, upserted: 0, superseded: 0, skipped: 0, provisional: 0, status: 'ok', error: '', timedOut: false,
+              scanned: 0, upserted: 0, superseded: 0, skipped: 0, provisional: 0, unchanged: 0, status: 'ok', error: '', timedOut: false,
               threadsFetched: 0, oldestYmd: '' };
 
   try {
@@ -560,8 +560,10 @@ function runIngest_(query, mode, opts) {
       appendNewAliases_(ss, newAliases);
       run.superseded = Object.keys(supersedeRowIdx).length;
       run.upserted = toAppend.length;
+      var swept = sweepSupersededToHistory_(ss);   // keep Price = one current row per (sku, type)
       Logger.log('Ingest ' + mode + ': upserted ' + run.upserted + ' (provisional ' + run.provisional +
-        '), superseded ' + run.superseded + ', skipped ' + run.skipped);
+        '), superseded ' + run.superseded + ' (→ history ' + swept + '), unchanged ' + run.unchanged +
+        ', skipped ' + run.skipped);
       metaSet_(ss, 'email_last_cursor', ymd_(new Date()));
       metaSet_(ss, 'last_full_sync', nowIso_());
     }
@@ -591,6 +593,13 @@ function reconcile_(sku, ptype, it, ctx, state, toAppend, supersedeRowIdx, run) 
   var group = state.byKey[sku + '|' + ptype] || (state.byKey[sku + '|' + ptype] = []);
   if (state.byId[priceId] || pendingHas_(toAppend, priceId)) return;   // already have this exact row
 
+  // Unchanged-price guard: an RFQ thread re-sends the same quote table in every reply, which used
+  // to append one history row per reply date. If the active row already carries this amount, the
+  // price hasn't moved — record nothing (effective_date stays the first date this price was seen).
+  for (var ui = 0; ui < group.length; ui++) {
+    if (!group[ui].superseded && Number(group[ui].amount) === Number(it.unit_thb)) { run.unchanged++; return; }
+  }
+
   // Determine the newest effective date across existing + pending + this new row.
   var newest = ctx.effDate;
   group.forEach(function (g) { if (g.eff > newest) newest = g.eff; });
@@ -613,7 +622,8 @@ function reconcile_(sku, ptype, it, ctx, state, toAppend, supersedeRowIdx, run) 
     ptype, it.unit_thb, 'THB', it.qty_basis || 'per_unit', ctx.effDate, isActive ? 'FALSE' : 'TRUE',
     'email', 'gmail:' + ctx.msgId, '🟢', '[EXT email ' + ctx.effDate + ']', ctx.subject, nowIso_()
   ]);
-  group.push({ rowIndex: -1, appendIdx: toAppend.length - 1, eff: ctx.effDate, superseded: !isActive });
+  group.push({ rowIndex: -1, appendIdx: toAppend.length - 1, eff: ctx.effDate, superseded: !isActive,
+               amount: Number(it.unit_thb) });
 }
 
 // ---------------------------------------------------------------------------
@@ -794,8 +804,9 @@ function classifyPriceType_(part, desc) {
   // support/maintenance: Cisco CON-/SNTC/SNT, "MA", net.cover (Allied-Telesis), advance(d) replacement
   // (Fortinet AR), warranty/RMA, plus plain support/maintenance/service.
   if (/\bcon-|sntc|\bsnt\b|\bma\b|support|maintenance|service|net\.?cover|advance[d]? replacement|\bwarranty\b|\brma\b/.test(s)) return 'support_yr';
-  // license/subscription: lic(ense), subscription, term, DNA, N-year terms, and Device/User CALs.
-  if (/lic|licen|subscription|term|dna|-3y|-1y|-5y|(device|user)\s*cal/.test(s)) return 'lic_yr';
+  // license/subscription: lic(ense), subscription, term, DNA, N-year terms, Device/User CALs,
+  // and cloud-management subscriptions (e.g. "3Yr FortiGate Cloud Management" — not hardware).
+  if (/lic|licen|subscription|term|dna|-3y|-1y|-5y|(device|user)\s*cal|\bcloud\b|\b\d+\s*yr\b/.test(s)) return 'lic_yr';
   return 'hw';
 }
 
@@ -835,9 +846,18 @@ function readPriceState_(ss) {
     (byKey[key] || (byKey[key] = [])).push({
       rowIndex: i + 2,                                       // 1-based incl. header
       eff: String(r[d.col.effective_date] || ''),
-      superseded: String(r[d.col.superseded]).toUpperCase() === 'TRUE'
+      superseded: String(r[d.col.superseded]).toUpperCase() === 'TRUE',
+      amount: Number(r[d.col.amount_thb] || 0)
     });
   });
+  // Rows already swept to Price_History must still dedupe by price_id, or a re-scan of old mail
+  // would re-append them to Price (and they'd be swept again — history would grow every run).
+  var hist = ss.getSheetByName(PRICE_HISTORY_SHEET);
+  if (hist && hist.getLastRow() > 1) {
+    hist.getRange(2, 1, hist.getLastRow() - 1, 1).getValues().forEach(function (r) {
+      if (r[0]) byId[r[0]] = true;
+    });
+  }
   return { byId: byId, byKey: byKey, supersededCol: d.col.superseded + 1 };
 }
 
@@ -849,6 +869,40 @@ function applySupersede_(ss, supersedeRowIdx) {
     if (!(n >= 2)) return;                            // defensive: only real data rows (header is row 1)
     d.sh.getRange(n, c).setValue('TRUE');
   });
+}
+
+var PRICE_HISTORY_SHEET = 'Price_History';
+
+/**
+ * Move superseded rows out of the live `Price` tab into `Price_History`, so Price always reads as
+ * exactly ONE current row per (sku_key, price_type). Runs at the end of every write run; the
+ * rewrite is a single clear + setValues (no per-row deletes). Returns the number of rows moved.
+ */
+function sweepSupersededToHistory_(ss) {
+  var d = sheetData_(ss, 'Price');
+  if (!d.rows.length) return 0;
+  var sup = [], act = [];
+  d.rows.forEach(function (r) {
+    var flag = String(r[d.col.superseded]).toUpperCase();
+    (flag === 'TRUE' || flag === '1' ? sup : act).push(r);
+  });
+  if (!sup.length) return 0;
+  var hist = ss.getSheetByName(PRICE_HISTORY_SHEET);
+  if (!hist) {
+    hist = ss.insertSheet(PRICE_HISTORY_SHEET);
+    hist.appendRow(d.headers.concat(['moved_at']));
+  }
+  var movedAt = nowIso_();
+  appendRows_(ss, PRICE_HISTORY_SHEET, sup.map(function (r) { return r.concat([movedAt]); }));
+  d.sh.getRange(2, 1, d.rows.length, d.headers.length).clearContent();
+  if (act.length) d.sh.getRange(2, 1, act.length, d.headers.length).setValues(act);
+  return sup.length;
+}
+
+/** Manual entry point: compact Price now (one-time migration of old history rows; safe to re-run). */
+function compactPriceTab() {
+  var moved = sweepSupersededToHistory_(db_());
+  Logger.log('compactPriceTab: moved ' + moved + ' superseded rows to ' + PRICE_HISTORY_SHEET);
 }
 
 function appendRows_(ss, name, rows) {
@@ -899,7 +953,7 @@ function notifyChat_(run) {
   var icon = run.status === 'error' ? '🔴' : (run.status === 'dry_run' ? '🧪' : '✅');
   var text = '[Database GG-Sheet] email ' + run.mode + ' sync ' + icon + '\n' +
     'Scanned ' + run.scanned + ' price mails → upserted ' + run.upserted +
-    ', superseded ' + run.superseded + ', skipped ' + run.skipped +
+    ', superseded ' + run.superseded + ', unchanged ' + (run.unchanged || 0) + ', skipped ' + run.skipped +
     (run.skipped ? ' (unmatched → check _alias)' : '') +
     (run.status === 'error' ? '\nERROR: ' + run.error : '');
   try {

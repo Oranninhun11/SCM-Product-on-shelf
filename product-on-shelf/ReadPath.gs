@@ -52,15 +52,23 @@ function getPricing() {
 }
 
 /**
- * Pure transform (no Sheets API, unit-testable): active Price rows → { view: { pricelist: [...] } }.
- * One item per sku_key, priced hw > lic_yr > support_yr; newest effective_date wins within a type.
+ * Pure transform (no Sheets API, unit-testable): active Price rows →
+ *   { view: { pricelist: [...], parts: { 'PART#': { hw, lic_yr, support_yr } } } }.
+ * pricelist = one item per sku_key (hw > lic_yr > support_yr) for the plain list views.
+ * parts     = EVERY price type per part#, so bundle views can price a chassis (hw), its DNA
+ *             license (lic_yr) AND its SmartNet/Net.Cover support (support_yr) — the old
+ *             best-per-sku shape silently dropped support prices whenever hw existed.
+ * Newest effective_date wins within a type.
  * @param {Array<{sku_key,vendor,model,type,amount,eff,superseded}>} rows
  */
 function posBuildPricing_(rows) {
   var TYPE_RANK = { hw: 3, lic_yr: 2, support_yr: 1 };
-  var best = {};   // sku_key → chosen row
+  var best = {};     // sku_key → chosen row (headline pricelist item)
+  var byType = {};   // sku_key|type → newest row (feeds the parts map)
   rows.forEach(function (r) {
     if (r.superseded || !r.sku_key || !(r.amount > 0)) return;
+    var tk = r.sku_key + '|' + r.type;
+    if (!byType[tk] || r.eff > byType[tk].eff) byType[tk] = r;
     var cur = best[r.sku_key];
     if (!cur) { best[r.sku_key] = r; return; }
     var rRank = TYPE_RANK[r.type] || 0, cRank = TYPE_RANK[cur.type] || 0;
@@ -77,6 +85,16 @@ function posBuildPricing_(rows) {
     var unit = r.type === 'hw' ? 'each' : 'per unit/yr';
     (out[view] || (out[view] = { pricelist: [] })).pricelist.push(
       { brand: vendor, model: label, price: Math.round(r.amount), unit: unit });
+  });
+
+  Object.keys(byType).forEach(function (tk) {
+    var r = byType[tk];
+    var view = POS_CATEGORY_TO_VIEW[r.sku_key.split(':')[0]];
+    if (!view) return;
+    var v = out[view] || (out[view] = { pricelist: [] });
+    var p = v.parts || (v.parts = {});
+    var part = String(r.model).toUpperCase();
+    (p[part] || (p[part] = {}))[r.type] = Math.round(r.amount);
   });
 
   // Cheapest first within each view — stable, readable order.

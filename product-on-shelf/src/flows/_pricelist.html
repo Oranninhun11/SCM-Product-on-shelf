@@ -314,7 +314,8 @@
       };
 
       function cfgFor(key) {
-        var ov = P[key] && P[key].pricelist;
+        var pv = P[key] || {};
+        var ov = pv.pricelist;
         var d = DEFAULTS[key];
         // Curated bundle catalog (e.g. switch): KEEP the in-code model list; treat the ingested pricelist
         // purely as a part#→price source. Component costs resolve from it, so DNA/PSU/optics/cables stay
@@ -328,6 +329,7 @@
           });
           var cfg = {}; for (var k in d) cfg[k] = d[k];
           cfg.priceMap = pm;
+          cfg.parts = pv.parts || {};   // per-type DB prices: { 'PART#': { hw, lic_yr, support_yr } }
           return cfg;
         }
         if (ov && ov.items) return ov;                                   // full override
@@ -390,9 +392,27 @@
         // model (rebuilt on model change). Plain models fall back to the family-level cfg.
         function isBundle(it) { return !!(it && it.components && it.components.length); }
         function compsByRole(it, role) { return (it.components || []).filter(function (c) { return c.role === role; }); }
-        // Component price = ingested price for that part# (bundleCatalog) if present, else the mock fallback.
+        // Component price = ingested DB price for that part# (bundleCatalog) if present, else mock.
+        // `parts` is the per-type map from ReadPath ({ hw, lic_yr, support_yr }); `priceMap` is the
+        // legacy flat pricelist-derived map kept as a second live source.
         var priceMap = cfg.priceMap || {};
-        function priceOf(part, fallback) { var v = priceMap[String(part || '').toUpperCase()]; return (v != null) ? v : (fallback || 0); }
+        var liveParts = cfg.parts || {};
+        function liveVal(part, type) {
+          var pi = liveParts[String(part || '').toUpperCase()];
+          if (!pi) return null;
+          if (type) return (pi[type] != null) ? pi[type] : null;
+          var v = (pi.hw != null) ? pi.hw : (pi.lic_yr != null ? pi.lic_yr : pi.support_yr);
+          return (v != null) ? v : null;
+        }
+        // → { v: THB, live: true when the DB supplied it (vs the in-code mock fallback) }
+        function resolve(part, fallback, type) {
+          var lv = liveVal(part, type);
+          if (lv != null) return { v: lv, live: true };
+          var pm = priceMap[String(part || '').toUpperCase()];
+          if (pm != null) return { v: pm, live: true };
+          return { v: fallback || 0, live: false };
+        }
+        function priceOf(part, fallback, type) { return resolve(part, fallback, type).v; }
         function addonCheckbox(name, price, checked) {
           return '<label class="flex items-center gap-2 text-sm">' +
             '<input type="checkbox" class="h-4 w-4 rounded border-border accent-brand-navy" data-role="addon"' + (checked ? ' checked' : '') +
@@ -506,12 +526,16 @@
 
             // --- Device: ONE merged line. Bundle = sum(device SKUs) + ticked hardware add-ons; plain = list price.
             //     Plain-model add-ons stay their own lines (unchanged); bundle add-ons fold into Device + show in detail.
-            var perUnit, addonRows = '', addonTotal = 0, detailComps = [];
+            var perUnit, addonRows = '', addonTotal = 0, detailComps = [], liveCount = 0;
             if (bundle) {
               perUnit = 0;
-              compsByRole(it, 'device').forEach(function (c) { perUnit += priceOf(c.part, c.price); detailComps.push({ c: c, on: true }); });
+              compsByRole(it, 'device').forEach(function (c) {
+                var rz = resolve(c.part, c.price); perUnit += rz.v; if (rz.live) liveCount++;
+                detailComps.push({ c: c, on: true, live: rz.live }); });
               compsByRole(it, 'addon').forEach(function (c) {
-                var on = !!checkedAddon[c.name || c.part]; if (on) perUnit += priceOf(c.part, c.price); detailComps.push({ c: c, on: on }); });
+                var rz = resolve(c.part, c.price); var on = !!checkedAddon[c.name || c.part];
+                if (on) perUnit += rz.v; if (rz.live) liveCount++;
+                detailComps.push({ c: c, on: on, live: rz.live }); });
             } else {
               perUnit = it.price;
               host.querySelectorAll('[data-role="addon"]').forEach(function (cb) {
@@ -520,12 +544,13 @@
             var device = perUnit * qty;
 
             // --- Subscription tier: bundle picks a DNA component; plain uses the family tier list (brand-aware).
-            var subAmt = 0, subRow = '', chosenDna = null;
+            var subAmt = 0, subRow = '', chosenDna = null, dnaLive = false;
             var tierEl = q('lic-tier');
             if (bundle) {
               var dnas = compsByRole(it, 'dna');
               chosenDna = dnas.filter(function (c) { return c.id === (tierEl && tierEl.value); })[0] || dnas[0];
-              if (chosenDna) { var syb = chosenDna.perYear ? yrs : 1; subAmt = priceOf(chosenDna.part, chosenDna.price) * qty * syb;
+              if (chosenDna) { var rzd = resolve(chosenDna.part, chosenDna.price); dnaLive = rzd.live; if (rzd.live) liveCount++;
+                var syb = chosenDna.perYear ? yrs : 1; subAmt = rzd.v * qty * syb;
                 subRow = row('Subscription · ' + chosenDna.name + (chosenDna.perYear ? ' · ' + syb + ' yr' : ''), thb(subAmt)); }
             } else if (lt) {
               var brandNow = q('brand') ? q('brand').value : brands[0];
@@ -535,8 +560,21 @@
             }
 
             // --- Support: bundle uses the support SKU (e.g. SmartNet); plain ≈ 10% of list per unit/yr.
-            var supComp = bundle ? compsByRole(it, 'support')[0] : null;
-            var supBase = supComp ? priceOf(supComp.part, supComp.price) : Math.round(perUnit * SUPP_RATE);
+            // The support SKU itself is rarely quoted under its own part# — SmartNet/Net.Cover contracts
+            // are aliased onto the parent device sku as support_yr — so fall back to the chassis part's
+            // ingested support_yr before the mock price.
+            var supComp = bundle ? compsByRole(it, 'support')[0] : null, supLive = false;
+            var supBase;
+            if (supComp) {
+              var rzs = resolve(supComp.part, supComp.price);
+              if (!rzs.live && it.components[0]) {
+                var ds = liveVal(it.components[0].part, 'support_yr');
+                if (ds != null) rzs = { v: ds, live: true };
+              }
+              supBase = rzs.v; supLive = rzs.live; if (rzs.live) liveCount++;
+            } else {
+              supBase = Math.round(perUnit * SUPP_RATE);
+            }
             var sitePrep = site ? SITE_PREP : 0;
             var impl = implOn ? implFor(key)[sow] * LOC_MULT[loc] : 0;
             var support = supportOn ? supBase * qty * yrs * SLA_MULT[sla] * (adv ? ADV_MULT : 1) : 0;
@@ -550,13 +588,15 @@
                    row('Site prep', site ? thb(sitePrep) : '—') +
                    row('Implementation', implOn ? thb(impl) : '—') +
                    row('Support · ' + yrs + ' yr · ' + SLA_LABEL[sla] + (adv ? ' · Adv. RMA' : ''), supportOn ? thb(support) : '—');
-            descMeta = it.model + ' · ' + qty + ' ' + (qty > 1 ? 'units' : 'unit');
+            descMeta = it.model + ' · ' + qty + ' ' + (qty > 1 ? 'units' : 'unit') +
+              (bundle && liveCount ? ' <span class="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">' +
+                liveCount + ' live price' + (liveCount > 1 ? 's' : '') + '</span>' : '');
 
             // --- Read-only SKU detail (the merged-into-Device BoM + the subscription/support SKUs) ---
             if (bundle) {
-              var lines = detailComps.map(function (d) { return { part: d.c.part, desc: d.c.desc, price: priceOf(d.c.part, d.c.price), on: d.on }; });
-              if (chosenDna) lines.push({ part: chosenDna.part, desc: chosenDna.desc, price: priceOf(chosenDna.part, chosenDna.price), on: true });
-              if (supComp) lines.push({ part: supComp.part, desc: supComp.desc, price: priceOf(supComp.part, supComp.price), on: supportOn });
+              var lines = detailComps.map(function (d) { return { part: d.c.part, desc: d.c.desc, price: priceOf(d.c.part, d.c.price), on: d.on, live: d.live }; });
+              if (chosenDna) lines.push({ part: chosenDna.part, desc: chosenDna.desc, price: priceOf(chosenDna.part, chosenDna.price), on: true, live: dnaLive });
+              if (supComp) lines.push({ part: supComp.part, desc: supComp.desc, price: supBase, on: supportOn, live: supLive });
               var nOn = lines.filter(function (l) { return l.on; }).length;
               detailHtml =
                 '<div class="border-t border-border px-6 py-3 text-sm">' +
@@ -565,7 +605,8 @@
                   '<div class="mt-2 hidden space-y-1" data-role="bom-detail">' +
                     lines.map(function (l) {
                       return '<div class="flex items-baseline justify-between gap-3' + (l.on ? '' : ' opacity-40 line-through') + '">' +
-                        '<span class="font-mono text-xs">' + l.part + '</span>' +
+                        '<span class="font-mono text-xs">' + l.part +
+                          (l.live ? ' <span class="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" title="live DB price"></span>' : '') + '</span>' +
                         '<span class="flex-1 px-2 text-xs text-muted-foreground">' + l.desc + '</span>' +
                         '<span class="tabular-nums text-xs">' + (l.price ? thb(l.price) : 'incl.') + '</span></div>'; }).join('') +
                   '</div></div>';
