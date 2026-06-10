@@ -385,6 +385,8 @@ var ALIAS_SEED = [
   ['AT-QSFP1CU',          'cabling:alliedtelesis:at-qsfp1cu',  '40G QSFP+ DAC 1m'],
   // --- Allied-Telesis transceiver Net.Cover support (classify net.cover rule -> support_yr) ---
   ['AT-SP10TW1-NCA1',     'cabling:alliedtelesis:at-sp10tw1',  'Net.Cover Advanced 1yr (SP10TW1) -> support_yr'],
+  ['AT-SP10TW3-NCA1',     'cabling:alliedtelesis:at-sp10tw3',  'Net.Cover Advanced 1yr (SP10TW3) -> support_yr'],
+  ['AT-QSFP1CU-NCA1',     'cabling:alliedtelesis:at-qsfp1cu',  'Net.Cover Advanced 1yr (QSFP1CU) -> support_yr'],
   ['AT-SPLX10A-NCA1',     'cabling:alliedtelesis:at-splx10a',  'Net.Cover Advanced 1yr (SPLX10A) -> support_yr'],
   ['AT-SP10SR-NCA1',      'cabling:alliedtelesis:at-sp10sr',   'Net.Cover Advanced 1yr (SP10SR) -> support_yr'],
   ['AT-SPSX-NCA1',        'cabling:alliedtelesis:at-spsx',     'Net.Cover Advanced 1yr (SPSX) -> support_yr'],
