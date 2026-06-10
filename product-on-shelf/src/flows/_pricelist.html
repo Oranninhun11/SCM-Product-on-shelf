@@ -153,14 +153,127 @@
         wireless: { label: 'Wireless (AP/WLC)', icon: 'wifi', qtyLabel: 'Access points', subscription: false, items: [
           { brand: 'Cisco', model: 'Cisco Catalyst 9120AXI', price: 32000, unit: 'per AP' }, { brand: 'Cisco', model: 'Cisco Catalyst 9136', price: 48000, unit: 'per AP' }, { brand: 'Cisco', model: 'Cisco Catalyst CW9176', price: 62000, unit: 'per AP' },
           { brand: 'Aruba', model: 'Aruba AP-535', price: 28000, unit: 'per AP' }, { brand: 'Aruba', model: 'Aruba AP-635', price: 42000, unit: 'per AP' }, { brand: 'Aruba', model: 'Aruba AP-735', price: 58000, unit: 'per AP' } ] },
-        hci: { label: 'Server / HCI', icon: 'server', qtyLabel: 'Nodes', subscription: false, items: [
-          { brand: 'Nutanix', model: 'Nutanix NX-3155-G9', price: 1150000, unit: 'per node (hw)' }, { brand: 'Supermicro', model: 'Supermicro SYS-2125H (Proxmox)', price: 720000, unit: 'per node (hw)' } ] },
-        server: { label: 'Standalone Server', icon: 'cpu', qtyLabel: 'Servers', subscription: false, items: [
-          { brand: 'Dell', model: 'Dell PowerEdge R660', price: 180000, unit: 'base config' }, { brand: 'Dell', model: 'Dell PowerEdge R760', price: 280000, unit: 'base config' },
-          { brand: 'HPE', model: 'HPE ProLiant DL360 Gen11', price: 175000, unit: 'base config' }, { brand: 'HPE', model: 'HPE ProLiant DL380 Gen11', price: 275000, unit: 'base config' } ] },
-        storage: { label: 'Storage', icon: 'hard-drive', qtyLabel: 'Arrays', subscription: false, items: [
-          { brand: 'Dell', model: 'Dell PowerStore 500T', price: 850000, unit: 'per array' }, { brand: 'Dell', model: 'Dell PowerStore 1200T', price: 1500000, unit: 'per array' }, { brand: 'Dell', model: 'Dell PowerStore 3200T', price: 2600000, unit: 'per array' },
-          { brand: 'NetApp', model: 'NetApp AFF A250', price: 780000, unit: 'per array' }, { brand: 'NetApp', model: 'NetApp AFF A400', price: 1650000, unit: 'per array' }, { brand: 'NetApp', model: 'NetApp AFF A800', price: 2900000, unit: 'per array' } ] },
+        // ---- Server / HCI: curated node bundles (same shape as switch/firewall) ----
+        // device → node hardware (chassis + CPU/RAM/NVMe/NIC) merged into the Device line; dna → the
+        // hypervisor/HCI software subscription (per node/yr, pick one); addon → optional capacity/NIC;
+        // support → vendor production support (per node/yr). Prices MOCK; ingested part#s feed via priceMap.
+        hci: { label: 'Server / HCI', icon: 'server', qtyLabel: 'Nodes', subscription: false,
+          componentToggles: true, bundleCatalog: true, items: [
+          { brand: 'Nutanix', model: 'Nutanix NX-3155-G9', price: 1150000, unit: 'configured', components: [
+            { part: 'NX-3155-G9',     desc: 'Nutanix NX-3155-G9 1U all-flash node (dual-socket, 24 DIMM)',  price: 380000, role: 'device' },
+            { part: 'INT-6442Y-2P',   desc: '2× Intel Xeon Gold 6442Y (24-core, 2.6 GHz)',                  price: 260000, role: 'device' },
+            { part: 'MEM-512G-NX',    desc: '512 GB DDR5-4800 (16× 32 GB RDIMM)',                            price: 180000, role: 'device' },
+            { part: 'NVMe-7T68-6P',   desc: '6× 7.68 TB NVMe SSD (all-flash)',                               price: 270000, role: 'device' },
+            { part: 'NIC-25GE-2P',    desc: 'Dual-port 25 GbE SFP28 NIC',                                    price: 60000,  role: 'device' },
+            { part: 'AOS-BASE',       desc: 'Nutanix AOS (CVM, hypervisor-agnostic)',                        price: 0,      role: 'device' },
+            { part: 'NVMe-7T68-2P',   desc: '+2× 7.68 TB NVMe (capacity expansion)',                         price: 90000,  role: 'addon', name: '+2× 7.68 TB NVMe (NVMe-7T68-2P)', on: false },
+            { part: 'NIC-100GE-2P',   desc: 'Dual-port 100 GbE QSFP56 NIC upgrade',                          price: 95000,  role: 'addon', name: '100 GbE NIC upgrade (NIC-100GE-2P)', on: false },
+            { part: 'NCI-STARTER',    desc: 'Nutanix Cloud Infrastructure Starter (per node/yr)',            price: 120000, role: 'dna', id: 'nci-starter', name: 'NCI Starter', perYear: true },
+            { part: 'NCI-PRO',        desc: 'Nutanix Cloud Infrastructure Pro (per node/yr)',                price: 210000, role: 'dna', id: 'nci-pro',     name: 'NCI Pro',     perYear: true },
+            { part: 'NCI-ULTIMATE',   desc: 'Nutanix Cloud Infrastructure Ultimate (per node/yr)',           price: 320000, role: 'dna', id: 'nci-ult',     name: 'NCI Ultimate', perYear: true },
+            { part: 'NX-PRD-SUP',     desc: 'Nutanix Production Support (per node/yr)',                      price: 95000,  role: 'support', perYear: true } ] },
+          { brand: 'Supermicro', model: 'Supermicro SYS-2125H (Proxmox)', price: 720000, unit: 'configured', components: [
+            { part: 'SYS-2125H-TNR', desc: 'Supermicro Hyper SYS-2125H 2U node (dual-socket AMD EPYC)',      price: 280000, role: 'device' },
+            { part: 'EPYC-9354-2P',  desc: '2× AMD EPYC 9354 (32-core, 3.25 GHz)',                           price: 190000, role: 'device' },
+            { part: 'MEM-512G-SM',   desc: '512 GB DDR5-4800 (12× ... RDIMM)',                               price: 150000, role: 'device' },
+            { part: 'NVMe-3T84-6P',  desc: '6× 3.84 TB NVMe SSD',                                            price: 100000, role: 'device' },
+            { part: 'NVMe-3T84-2P',  desc: '+2× 3.84 TB NVMe (capacity expansion)',                          price: 35000,  role: 'addon', name: '+2× 3.84 TB NVMe (NVMe-3T84-2P)', on: false },
+            { part: 'NIC-25GE-2P',   desc: 'Dual-port 25 GbE SFP28 NIC',                                     price: 40000,  role: 'addon', name: '25 GbE NIC (NIC-25GE-2P)', on: false },
+            { part: 'PVE-BASIC',     desc: 'Proxmox VE Basic subscription (per node/yr)',                    price: 18000,  role: 'dna', id: 'pve-basic', name: 'Proxmox VE Basic', perYear: true },
+            { part: 'PVE-STD',       desc: 'Proxmox VE Standard subscription (per node/yr)',                 price: 36000,  role: 'dna', id: 'pve-std',   name: 'Proxmox VE Standard', perYear: true },
+            { part: 'PVE-PREMIUM',   desc: 'Proxmox VE Premium subscription (per node/yr)',                  price: 70000,  role: 'dna', id: 'pve-prem',  name: 'Proxmox VE Premium', perYear: true },
+            { part: 'SCM-HW-NBD',    desc: 'SCM hardware support NBD (per node/yr)',                         price: 45000,  role: 'support', perYear: true } ] } ] },
+        // ---- Standalone Server: curated server bundles. No dna (OS is its own flow); device + add-ons + support. ----
+        server: { label: 'Standalone Server', icon: 'cpu', qtyLabel: 'Servers', subscription: false,
+          componentToggles: true, bundleCatalog: true, items: [
+          { brand: 'Dell', model: 'Dell PowerEdge R660', price: 180000, unit: 'configured', components: [
+            { part: 'PE-R660',        desc: 'Dell PowerEdge R660 1U chassis, iDRAC9 Enterprise, dual 1100W PSU', price: 50000, role: 'device' },
+            { part: 'INT-4416-2P',    desc: '2× Intel Xeon Silver 4416+ (20-core, 2.0 GHz)',                 price: 55000,  role: 'device' },
+            { part: 'MEM-256G-R660',  desc: '256 GB DDR5-4800 (8× 32 GB RDIMM)',                             price: 40000,  role: 'device' },
+            { part: 'BOSS-N1',        desc: 'BOSS-N1 2× 480 GB M.2 boot (RAID1)',                            price: 8000,   role: 'device' },
+            { part: 'NVMe-1T92-4P',   desc: '4× 1.92 TB NVMe SSD',                                           price: 20000,  role: 'device' },
+            { part: 'PERC-H965i',     desc: 'PERC H965i RAID controller',                                    price: 7000,   role: 'device' },
+            { part: 'MEM-256G-UP',    desc: '+256 GB DDR5-4800 (8× 32 GB RDIMM)',                            price: 40000,  role: 'addon', name: '+256 GB RAM (MEM-256G-UP)', on: false },
+            { part: 'GPU-L4',         desc: 'NVIDIA L4 24 GB GPU',                                           price: 95000,  role: 'addon', name: 'NVIDIA L4 GPU (GPU-L4)', on: false },
+            { part: 'NIC-25GE-4P',    desc: 'Quad-port 25 GbE SFP28 NIC',                                    price: 55000,  role: 'addon', name: 'Quad 25 GbE NIC (NIC-25GE-4P)', on: false },
+            { part: 'PSP-NBD-R660',   desc: 'Dell ProSupport Plus NBD (per server/yr)',                      price: 18000,  role: 'support', perYear: true } ] },
+          { brand: 'Dell', model: 'Dell PowerEdge R760', price: 280000, unit: 'configured', components: [
+            { part: 'PE-R760',        desc: 'Dell PowerEdge R760 2U chassis, iDRAC9 Enterprise, dual 1400W PSU', price: 80000, role: 'device' },
+            { part: 'INT-6442Y-2P',   desc: '2× Intel Xeon Gold 6442Y (24-core, 2.6 GHz)',                  price: 110000, role: 'device' },
+            { part: 'MEM-512G-R760',  desc: '512 GB DDR5-4800 (16× 32 GB RDIMM)',                            price: 60000,  role: 'device' },
+            { part: 'BOSS-N1',        desc: 'BOSS-N1 2× 480 GB M.2 boot (RAID1)',                            price: 8000,   role: 'device' },
+            { part: 'NVMe-3T84-4P',   desc: '4× 3.84 TB NVMe SSD',                                           price: 15000,  role: 'device' },
+            { part: 'PERC-H965i',     desc: 'PERC H965i RAID controller',                                    price: 7000,   role: 'device' },
+            { part: 'MEM-512G-UP',    desc: '+512 GB DDR5-4800 (16× 32 GB RDIMM)',                           price: 60000,  role: 'addon', name: '+512 GB RAM (MEM-512G-UP)', on: false },
+            { part: 'GPU-L40S',       desc: 'NVIDIA L40S 48 GB GPU',                                         price: 320000, role: 'addon', name: 'NVIDIA L40S GPU (GPU-L40S)', on: false },
+            { part: 'NIC-100GE-2P',   desc: 'Dual-port 100 GbE QSFP56 NIC',                                  price: 110000, role: 'addon', name: '100 GbE NIC (NIC-100GE-2P)', on: false },
+            { part: 'PSP-NBD-R760',   desc: 'Dell ProSupport Plus NBD (per server/yr)',                      price: 28000,  role: 'support', perYear: true } ] },
+          { brand: 'HPE', model: 'HPE ProLiant DL360 Gen11', price: 175000, unit: 'configured', components: [
+            { part: 'P28948-B21',     desc: 'HPE ProLiant DL360 Gen11 1U chassis, iLO6, dual 800W PSU',      price: 48000,  role: 'device' },
+            { part: 'INT-4416-2P',    desc: '2× Intel Xeon Silver 4416+ (20-core, 2.0 GHz)',                 price: 52000,  role: 'device' },
+            { part: 'MEM-256G-DL360', desc: '256 GB DDR5-4800 (8× 32 GB RDIMM)',                             price: 40000,  role: 'device' },
+            { part: 'MR408i-o',       desc: 'HPE MR408i-o Gen11 RAID controller',                            price: 7000,   role: 'device' },
+            { part: 'NVMe-1T92-4P-H', desc: '4× 1.92 TB NVMe SSD',                                           price: 28000,  role: 'device' },
+            { part: 'MEM-256G-UP-H',  desc: '+256 GB DDR5-4800 (8× 32 GB RDIMM)',                            price: 40000,  role: 'addon', name: '+256 GB RAM (MEM-256G-UP-H)', on: false },
+            { part: 'GPU-L4',         desc: 'NVIDIA L4 24 GB GPU',                                           price: 95000,  role: 'addon', name: 'NVIDIA L4 GPU (GPU-L4)', on: false },
+            { part: 'NIC-25GE-2P-H',  desc: 'Dual-port 25 GbE SFP28 adapter',                                price: 38000,  role: 'addon', name: '25 GbE adapter (NIC-25GE-2P-H)', on: false },
+            { part: 'HPE-TC-DL360',   desc: 'HPE Tech Care Essential NBD (per server/yr)',                   price: 18000,  role: 'support', perYear: true } ] },
+          { brand: 'HPE', model: 'HPE ProLiant DL380 Gen11', price: 275000, unit: 'configured', components: [
+            { part: 'P52560-B21',     desc: 'HPE ProLiant DL380 Gen11 2U chassis, iLO6, dual 1000W PSU',     price: 75000,  role: 'device' },
+            { part: 'INT-6442Y-2P',   desc: '2× Intel Xeon Gold 6442Y (24-core, 2.6 GHz)',                  price: 108000, role: 'device' },
+            { part: 'MEM-512G-DL380', desc: '512 GB DDR5-4800 (16× 32 GB RDIMM)',                            price: 60000,  role: 'device' },
+            { part: 'MR416i-o',       desc: 'HPE MR416i-o Gen11 RAID controller',                            price: 9000,   role: 'device' },
+            { part: 'NVMe-3T84-4P-H', desc: '4× 3.84 TB NVMe SSD',                                           price: 23000,  role: 'device' },
+            { part: 'MEM-512G-UP-H',  desc: '+512 GB DDR5-4800 (16× 32 GB RDIMM)',                           price: 60000,  role: 'addon', name: '+512 GB RAM (MEM-512G-UP-H)', on: false },
+            { part: 'GPU-L40S',       desc: 'NVIDIA L40S 48 GB GPU',                                         price: 320000, role: 'addon', name: 'NVIDIA L40S GPU (GPU-L40S)', on: false },
+            { part: 'NIC-100GE-2P-H', desc: 'Dual-port 100 GbE QSFP56 adapter',                              price: 105000, role: 'addon', name: '100 GbE adapter (NIC-100GE-2P-H)', on: false },
+            { part: 'HPE-TC-DL380',   desc: 'HPE Tech Care Essential NBD (per server/yr)',                   price: 27000,  role: 'support', perYear: true } ] } ] },
+        // ---- Storage: curated array bundles. Array OS (PowerStoreOS / ONTAP One) bundled into device;
+        //      replication / extra capacity / FC are add-ons; no dna tier. ----
+        storage: { label: 'Storage', icon: 'hard-drive', qtyLabel: 'Arrays', subscription: false,
+          componentToggles: true, bundleCatalog: true, items: [
+          { brand: 'Dell', model: 'Dell PowerStore 500T', price: 850000, unit: 'configured', components: [
+            { part: 'PS-500T',        desc: 'Dell PowerStore 500T base enclosure (dual active-active controllers, PowerStoreOS)', price: 420000, role: 'device' },
+            { part: 'NVMe-3T84-8P',   desc: '8× 3.84 TB NVMe SSD (≈ 30 TB raw)',                             price: 360000, role: 'device' },
+            { part: 'IO-25GE-4P',     desc: '4-port 25 GbE host I/O module (per controller pair)',           price: 70000,  role: 'device' },
+            { part: 'NVMe-3T84-8P-UP',desc: '+8× 3.84 TB NVMe (capacity expansion)',                         price: 360000, role: 'addon', name: '+8× 3.84 TB NVMe (NVMe-3T84-8P-UP)', on: false },
+            { part: 'IO-FC32-4P',     desc: '4-port 32 Gb FC host I/O module',                               price: 90000,  role: 'addon', name: '32 Gb FC I/O module (IO-FC32-4P)', on: false },
+            { part: 'PSP-MC-500T',    desc: 'Dell ProSupport Plus Mission Critical 4 hr (per array/yr)',     price: 95000,  role: 'support', perYear: true } ] },
+          { brand: 'Dell', model: 'Dell PowerStore 1200T', price: 1500000, unit: 'configured', components: [
+            { part: 'PS-1200T',       desc: 'Dell PowerStore 1200T base enclosure (dual controllers, PowerStoreOS)', price: 720000, role: 'device' },
+            { part: 'NVMe-7T68-12P',  desc: '12× 7.68 TB NVMe SSD (≈ 90 TB raw)',                            price: 690000, role: 'device' },
+            { part: 'IO-25GE-4P',     desc: '4-port 25 GbE host I/O module (per controller pair)',           price: 90000,  role: 'device' },
+            { part: 'NVMe-7T68-12P-UP',desc: '+12× 7.68 TB NVMe (capacity expansion)',                       price: 690000, role: 'addon', name: '+12× 7.68 TB NVMe (NVMe-7T68-12P-UP)', on: false },
+            { part: 'IO-FC32-4P',     desc: '4-port 32 Gb FC host I/O module',                               price: 95000,  role: 'addon', name: '32 Gb FC I/O module (IO-FC32-4P)', on: false },
+            { part: 'PSP-MC-1200T',   desc: 'Dell ProSupport Plus Mission Critical 4 hr (per array/yr)',     price: 165000, role: 'support', perYear: true } ] },
+          { brand: 'Dell', model: 'Dell PowerStore 3200T', price: 2600000, unit: 'configured', components: [
+            { part: 'PS-3200T',       desc: 'Dell PowerStore 3200T base enclosure (dual NVMe controllers, PowerStoreOS)', price: 1180000, role: 'device' },
+            { part: 'NVMe-15T36-12P', desc: '12× 15.36 TB NVMe SSD (≈ 180 TB raw)',                          price: 1320000, role: 'device' },
+            { part: 'IO-100GE-4P',    desc: '4-port 100 GbE host I/O module (per controller pair)',          price: 100000, role: 'device' },
+            { part: 'NVMe-15T36-12P-UP',desc: '+12× 15.36 TB NVMe (capacity expansion)',                     price: 1320000, role: 'addon', name: '+12× 15.36 TB NVMe (NVMe-15T36-12P-UP)', on: false },
+            { part: 'IO-FC32-4P',     desc: '4-port 32 Gb FC host I/O module',                               price: 100000, role: 'addon', name: '32 Gb FC I/O module (IO-FC32-4P)', on: false },
+            { part: 'PSP-MC-3200T',   desc: 'Dell ProSupport Plus Mission Critical 4 hr (per array/yr)',     price: 285000, role: 'support', perYear: true } ] },
+          { brand: 'NetApp', model: 'NetApp AFF A250', price: 780000, unit: 'configured', components: [
+            { part: 'AFF-A250',       desc: 'NetApp AFF A250 HA pair (dual controllers, ONTAP One incl.)',   price: 380000, role: 'device' },
+            { part: 'NVMe-3T84-8P-NA',desc: '8× 3.84 TB NVMe SSD',                                           price: 330000, role: 'device' },
+            { part: 'IO-25GE-4P-NA',  desc: '4-port 25 GbE host I/O (per HA pair)',                          price: 70000,  role: 'device' },
+            { part: 'NVMe-3T84-8P-NA-UP',desc: '+8× 3.84 TB NVMe (capacity expansion)',                      price: 330000, role: 'addon', name: '+8× 3.84 TB NVMe (NVMe-3T84-8P-NA-UP)', on: false },
+            { part: 'IO-FC32-4P-NA',  desc: '4-port 32 Gb FC adapter',                                       price: 85000,  role: 'addon', name: '32 Gb FC adapter (IO-FC32-4P-NA)', on: false },
+            { part: 'SE-PREM-A250',   desc: 'NetApp SupportEdge Premium 4 hr (per array/yr)',                price: 90000,  role: 'support', perYear: true } ] },
+          { brand: 'NetApp', model: 'NetApp AFF A400', price: 1650000, unit: 'configured', components: [
+            { part: 'AFF-A400',       desc: 'NetApp AFF A400 HA pair (dual controllers, ONTAP One incl.)',   price: 820000, role: 'device' },
+            { part: 'NVMe-7T68-12P-NA',desc: '12× 7.68 TB NVMe SSD',                                         price: 740000, role: 'device' },
+            { part: 'IO-25GE-4P-NA',  desc: '4-port 25 GbE host I/O (per HA pair)',                          price: 90000,  role: 'device' },
+            { part: 'NVMe-7T68-12P-NA-UP',desc: '+12× 7.68 TB NVMe (capacity expansion)',                    price: 740000, role: 'addon', name: '+12× 7.68 TB NVMe (NVMe-7T68-12P-NA-UP)', on: false },
+            { part: 'IO-FC32-4P-NA',  desc: '4-port 32 Gb FC adapter',                                       price: 95000,  role: 'addon', name: '32 Gb FC adapter (IO-FC32-4P-NA)', on: false },
+            { part: 'SE-PREM-A400',   desc: 'NetApp SupportEdge Premium 4 hr (per array/yr)',                price: 175000, role: 'support', perYear: true } ] },
+          { brand: 'NetApp', model: 'NetApp AFF A800', price: 2900000, unit: 'configured', components: [
+            { part: 'AFF-A800',       desc: 'NetApp AFF A800 HA pair (dual controllers, ONTAP One incl.)',   price: 1480000, role: 'device' },
+            { part: 'NVMe-15T36-12P-NA',desc: '12× 15.36 TB NVMe SSD',                                       price: 1320000, role: 'device' },
+            { part: 'IO-100GE-4P-NA', desc: '4-port 100 GbE host I/O (per HA pair)',                         price: 100000, role: 'device' },
+            { part: 'NVMe-15T36-12P-NA-UP',desc: '+12× 15.36 TB NVMe (capacity expansion)',                  price: 1320000, role: 'addon', name: '+12× 15.36 TB NVMe (NVMe-15T36-12P-NA-UP)', on: false },
+            { part: 'IO-FC32-4P-NA',  desc: '4-port 32 Gb FC adapter',                                       price: 100000, role: 'addon', name: '32 Gb FC adapter (IO-FC32-4P-NA)', on: false },
+            { part: 'SE-PREM-A800',   desc: 'NetApp SupportEdge Premium 4 hr (per array/yr)',                price: 320000, role: 'support', perYear: true } ] } ] },
         ups: { label: 'UPS / Power', icon: 'battery-charging', qtyLabel: 'Units', subscription: false, items: [
           { brand: 'APC', model: 'APC Smart-UPS SRT 3000', price: 65000, unit: 'each' }, { brand: 'APC', model: 'APC Smart-UPS SRT 6000', price: 120000, unit: 'each' }, { brand: 'APC', model: 'APC Symmetra 10kVA', price: 280000, unit: 'each' }, { brand: 'APC', model: 'APC Symmetra 20kVA', price: 480000, unit: 'each' },
           { brand: 'Vertiv', model: 'Vertiv Liebert GXT5 3kVA', price: 58000, unit: 'each' }, { brand: 'Vertiv', model: 'Vertiv Liebert GXT5 6kVA', price: 110000, unit: 'each' }, { brand: 'Vertiv', model: 'Vertiv Liebert APM 10kVA', price: 260000, unit: 'each' }, { brand: 'Vertiv', model: 'Vertiv Liebert APM 20kVA', price: 450000, unit: 'each' } ] },

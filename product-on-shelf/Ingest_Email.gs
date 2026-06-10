@@ -297,6 +297,7 @@ var ALIAS_SEED = [
   ['C9300-NM-8X',         'switch:cisco:c9300-nm-8x',    'Catalyst 9300 8x10GE network module'],
   ['C9200L-24T-4X-E',     'switch:cisco:c9200l-24t-4x-e','Catalyst 9200L 24p data, 4x10G'],
   ['C9200L-48T-4X-E',     'switch:cisco:c9200l-48t-4x-e','Catalyst 9200L 48p data, 4x10G'],
+  ['C9200L-48P-4X-E',     'switch:cisco:c9200l-48p-4x-e','Catalyst 9200L 48p PoE+, 4x10G'],
   ['C1300-24XTS',         'switch:cisco:c1300-24xts',    'Catalyst 1300 12p10GE + 12p SFP+'],
   ['C1300-16XTS',         'switch:cisco:c1300-16xts',    'Catalyst 1300 8p10GE + 8p SFP+'],
   ['C1300-48T-4G',        'switch:cisco:c1300-48t-4g',   'Catalyst 1300 48p GE, 4x1G SFP'],
@@ -304,6 +305,9 @@ var ALIAS_SEED = [
   ['C1300-24T-4X',        'switch:cisco:c1300-24t-4x',   'Catalyst 1300 24p GE, 4x10G SFP+'],
   ['C1300-16P-4X',        'switch:cisco:c1300-16p-4x',   'Catalyst 1300 16p GE PoE, 4x10G SFP+'],
   ['C1300X-24T-4X',       'switch:cisco:c1300x-24t-4x',  'Catalyst 1300X 24p GE, 4x10G SFP+'],
+  // --- Nutanix HCI (cost quotes arrive as xlsx; "Price to SCM" is a LINE TOTAL → stored per-unit via qty) ---
+  ['NX-8170-G10',         'hci:nutanix:nx-8170-g10',     'NX-8170-G10 node (1-node cfg) -> hw, per node (line total / qty)'],
+  ['SW-NCI-PRO-AP',       'hci:nutanix:nci-pro',         'NCI Pro subscription + L3 support -> per core (verify qty basis on readback)'],
   // --- Cisco support contracts (CON-*) -> support_yr, mapped to their parent device ---
   ['CON-SNTP-C930024U',   'switch:cisco:c9300-24ux-e',   'SNTC-24x7x4 support -> support_yr'],
   ['CON-SNTP-C93002TE',   'switch:cisco:c9300-24t-e',    'SNTC-24x7x4 support -> support_yr'],
@@ -320,9 +324,13 @@ var ALIAS_SEED = [
   ['C9300-DNA-E-24-3Y',   'switch:cisco:c9300-dna-e-24', 'DNA Essentials 24p, 3yr term'],
   ['C9200L-DNA-E-24-3Y',  'switch:cisco:c9200l-dna-e-24','DNA Essentials 24p, 3yr term'],
   ['C9200L-DNA-E-48-3Y',  'switch:cisco:c9200l-dna-e-48','DNA Essentials 48p, 3yr term'],
+  ['C9300-DNA-E-24-1R',   'switch:cisco:c9300-dna-e-24', 'DNA Essentials 24p, 1yr renewal'],
+  ['C9300L-DNA-E-24-1R',  'switch:cisco:c9300l-dna-e-24','DNA Essentials 24p (9300L), 1yr renewal'],
   // --- Cisco power supplies / stacking / accessories (hw); transceivers + DAC now under cabling: ---
   ['PWR-C1-1100WAC-P/2',  'switch:cisco:pwr-c1-1100wac', '1100W AC PSU (secondary)'],
   ['PWR-C1-350WAC-P/2',   'switch:cisco:pwr-c1-350wac',  '350W AC PSU (secondary)'],
+  ['PWR-C1-715WAC-P/2',   'switch:cisco:pwr-c1-715wac',  '715W AC PSU (secondary)'],
+  ['PWR-C5-1KWAC/2',      'switch:cisco:pwr-c5-1kwac',   '1KW AC PSU (secondary, C9200)'],
   ['C9K-ACC-RBFT',        'switch:cisco:acc-rbft',       'rubber feet (accessory)'],
   ['GLC-TE',              'cabling:cisco:glc-te',         '1000BASE-T SFP'],
   ['SFP-10G-LR',          'cabling:cisco:sfp-10g-lr',     '10GBASE-LR SFP'],
@@ -334,6 +342,9 @@ var ALIAS_SEED = [
   ['SFP-H25G-CU3M',       'cabling:cisco:sfp-h25g-cu3m',  '25G CU DAC 3m'],
   ['STACK-T1-50CM',       'switch:cisco:stack-t1-50cm',  'stacking cable 50cm'],
   ['CAB-SPWR-30CM',       'switch:cisco:cab-spwr-30cm',  'stack power cable 30cm'],
+  ['CAB-SPWR-150CM',      'switch:cisco:cab-spwr-150cm', 'stack power cable 150cm'],
+  ['SFP-10G-LR-S',        'cabling:cisco:sfp-10g-lr-s',   '10GBASE-LR SFP, enterprise-class'],
+  ['SFP-10G-T-X',         'cabling:cisco:sfp-10g-t-x',    '10GBASE-T copper SFP+'],
   ['RCKMNT-CMPCT-1K',     'switch:cisco:rckmnt-cmpct-1k','19in compact rack mount'],
   // --- Allied-Telesis switches (from earlier sample) ---
   ['AT-x950-28XTQm-E01',  'switch:alliedtelesis:at-x950-28xtqm','x950 24p mGig stackable'],
@@ -597,7 +608,7 @@ function reconcile_(sku, ptype, it, ctx, state, toAppend, supersedeRowIdx, run) 
   var parts = sku.split(':');
   toAppend.push([
     priceId, sku, parts[0] || '', parts[1] || '', parts.slice(2).join(':') || '',
-    ptype, it.unit_thb, 'THB', 'per_unit', ctx.effDate, isActive ? 'FALSE' : 'TRUE',
+    ptype, it.unit_thb, 'THB', it.qty_basis || 'per_unit', ctx.effDate, isActive ? 'FALSE' : 'TRUE',
     'email', 'gmail:' + ctx.msgId, '🟢', '[EXT email ' + ctx.effDate + ']', ctx.subject, nowIso_()
   ]);
   group.push({ rowIndex: -1, appendIdx: toAppend.length - 1, eff: ctx.effDate, superseded: !isActive });
@@ -608,10 +619,11 @@ function reconcile_(sku, ptype, it, ctx, state, toAppend, supersedeRowIdx, run) 
 // ---------------------------------------------------------------------------
 
 var INGEST_COL = {
-  part:  /part\s*(no|number)|p\s*\/?\s*n\b/i,
+  part:  /part\s*(no|number)|p\s*\/?\s*n\b|product\s*code|item\s*code|^\s*sku\b/i,
   desc:  /description|product/i,
   qty:   /^\s*qty|quantity/i,
-  unit:  /unit\s*price|dealer|per\s*item/i,
+  unit:  /unit\s*price|unit\s*cost|per\s*item/i,            // genuine per-unit price — never divided by qty
+  net:   /price\s*to\s*scm|net\s*price|dealer|\bcost\b/i,   // net/cost column — a LINE TOTAL on xlsx cost quotes
   total: /^\s*total|total\s*price/i
 };
 
@@ -636,18 +648,32 @@ function parsePriceTable_(html) {
  * body parser and the xlsx-attachment parser so both layouts go through identical column detection.
  * Cells may be strings (HTML) or numbers/dates (xlsx) — everything is String()-coerced defensively.
  */
-function extractPricedRows_(rows) {
+function extractPricedRows_(rows, opts) {
+  opts = opts || {};
   var out = [], h = findHeaderRow_(rows);
   if (!h) return out;                                                         // not a price table
   var idx = h.idx;
+  var priceCol = idx.unit != null ? idx.unit : (idx.net != null ? idx.net : idx.total);
+  var priceIsUnit = (idx.unit != null);                                       // price came from a genuine unit-price column
   for (var i = h.row + 1; i < rows.length; i++) {
     var r = rows[i];
     if (/grand\s*total|vat|valid|^\s*total\b/i.test(String(r[0] || ''))) continue;  // footer
     var part = String(r[idx.part] || '').trim();
     if (!part) continue;
-    var unit = toNum_(idx.unit != null ? r[idx.unit] : r[idx.total]);
-    if (unit == null || unit < 100) continue;                               // bundled '-' lines / stray qty values
-    out.push({ part: part, desc: String(r[idx.desc] || '').slice(0, 120), qty: toNum_(r[idx.qty]), unit_thb: unit });
+    var amt = toNum_(priceCol != null ? r[priceCol] : null);
+    if (amt == null || amt < 100) continue;                                 // bundled '-' lines / stray qty values
+    var qty = toNum_(r[idx.qty]);
+    // xlsx cost quotes (opts.lineTotals) carry a LINE TOTAL in the net/total column → divide by qty for a
+    // true unit price (Oran's call). Genuine unit-price columns and the HTML body path are never divided.
+    // A line-total column with no usable qty is kept as-is but flagged qty_basis so the DB row isn't mislabeled.
+    var divide = !!(opts.lineTotals && !priceIsUnit && qty && qty > 1);
+    out.push({
+      part: part,
+      desc: String(r[idx.desc] || '').slice(0, 120),
+      qty: qty,
+      unit_thb: divide ? amt / qty : amt,
+      qty_basis: (divide || priceIsUnit || !opts.lineTotals) ? 'per_unit' : 'line_total'
+    });
   }
   return out;
 }
@@ -718,7 +744,7 @@ function readXlsxBlob_(att) {
     var sheets = SpreadsheetApp.openById(fileId).getSheets();
     for (var s = 0; s < sheets.length; s++) {
       if (sheets[s].getLastRow() < 2) continue;          // empty/header-only tab
-      var items = extractPricedRows_(sheets[s].getDataRange().getValues());
+      var items = extractPricedRows_(sheets[s].getDataRange().getValues(), { lineTotals: true });
       for (var j = 0; j < items.length; j++) out.push(items[j]);
     }
   } catch (e) {
@@ -741,11 +767,13 @@ function htmlTableRows_(html) {
 
 function findHeaderRow_(rows) {
   for (var i = 0; i < rows.length; i++) {
-    var idx = {}, r = rows[i];
+    var idx = {}, used = {}, r = rows[i];
     for (var c = 0; c < r.length; c++) {
-      for (var k in INGEST_COL) { if (idx[k] == null && INGEST_COL[k].test(r[c])) idx[k] = c; }
+      // one column maps to at most one key (first match in part,desc,qty,unit,net,total order) — so a
+      // "Product Code" col is claimed by `part`, not double-claimed by `desc` (which also tests /product/).
+      for (var k in INGEST_COL) { if (idx[k] == null && !used[c] && INGEST_COL[k].test(r[c])) { idx[k] = c; used[c] = true; break; } }
     }
-    if (idx.part != null && idx.desc != null && (idx.unit != null || idx.total != null)) return { row: i, idx: idx };
+    if (idx.part != null && idx.desc != null && (idx.unit != null || idx.net != null || idx.total != null)) return { row: i, idx: idx };
   }
   return null;
 }

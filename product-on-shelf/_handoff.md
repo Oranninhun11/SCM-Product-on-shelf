@@ -1230,3 +1230,167 @@ firewall/HCI/server (or new) SKUs landed + new `_alias` blanks. Then curate (`AL
 > Resume: `/oran-software-engineer` on `product-on-shelf-app` — after 16:00 ICT 06-03 read the live DB back
 > (confirm today's `attach` run + new SKUs/`_alias` blanks); curate the 18 blanks into `ALIAS_SEED`
 > (8 ready, 10 CON-SNT pending decode) → `seedAliases()`. `script.send_mail` reauth still pending.
+
+---
+
+# Handoff — Product on Shelf (cont.)
+_Session: 2026-06-03 → 06-04 · software-engineer mode · Server/HCI/Storage → configured-bundle price lists_
+
+## Stage
+Price-list UX. **Server/HCI, Standalone Server, and Storage price lists converted from flat single-line
+items to configured-bundle catalogs** (same `bundleCatalog` pattern as switch/firewall). **Pushed to
+Apps Script `@HEAD`** (the `/dev` URL) — **NOT redeployed to prod (`@17`/`/exec`), NOT git-committed.**
+Ingestion/auth untouched this session.
+
+## Where we left off
+Edited `DEFAULTS.hci`/`.server`/`.storage` in `src/flows/_pricelist.html` into role-tagged bundles
+(device/dna/addon/support). Built (66 partials, manifest unchanged), verified, and `tools/push.sh`-ed
+`@HEAD` at 10:28. **Awaiting Oran's live eyeball** on the `/dev` URL (Server/HCI · Standalone Server ·
+Storage → Price list tab). The engine (`_pricelist.html`) needed **zero logic changes** — it already
+drives bundles generically, incl. dna-less bundles.
+
+## What shipped (one source file: `src/flows/_pricelist.html`)
+- **Server / HCI** — Nutanix NX-3155-G9 · Supermicro SYS-2125H (Proxmox). device = node HW
+  (chassis+CPU/RAM/NVMe/NIC); **dna tier** = NCI Starter/Pro/Ultimate (Nutanix) · Proxmox VE
+  Basic/Std/Premium; add-ons = capacity/NIC; support = vendor production support (per node/yr).
+- **Standalone Server** — Dell R660/R760 · HPE DL360/DL380 Gen11. device + add-ons (RAM/GPU/NIC) +
+  support; **NO dna** (OS is its own flow).
+- **Storage** — Dell PowerStore 500T/1200T/3200T · NetApp AFF A250/A400/A800. device (array+drives+I/O,
+  array OS bundled) + add-ons (capacity/FC) + support; **NO dna**.
+- Each model: merged headline Device price, per-model tier/add-on controls, "View SKU detail" BoM expander.
+
+## Verified (all green)
+- `node --check` on the extracted engine; `build.py` clean; preview monolith carries the new bundles.
+- **jsdom harness `/tmp/pos_bundle_test.js` — 25/25**: Device = Σ device comps per model; HCI shows a
+  subscription tier, server/storage correctly don't; tier-switch reprices; add-on toggles fold into
+  Device; support + SKU-detail expander render; simulated `window.PRICING.hci.pricelist` feeds the
+  NX-3155-G9 price by part# (1,150,000 → 1,170,000). (Can't paint the CDN shell headless → live eyeball pending.)
+
+## Open / blockers
+- 🟡 **Not eyeballed live** — sandbox can't render the CDN shell; Oran to hard-refresh the `/dev` URL.
+- 🟡 **Prod (`@17`/`/exec`) still serves the old build** until a `clasp deploy` redeploy — offered.
+- 🟡 **Component part#s are MOCK-format** (e.g. `PE-R660`, `INT-6442Y-2P`, `PS-500T`) — replaced by real
+  ingested part#s by exact uppercase match when HCI/server/storage xlsx quotes land in `Price`. Same
+  flag as the firewall FortiGuard/FortiCare SKUs.
+- 🟡 **Uncommitted** — local edit in `src/` only (index.html manifest unchanged).
+- ⚪ Carryovers (unchanged this session): `script.send_mail` reauth; firewall/HCI/server xlsx prices not
+  yet in `Price`; 18 `_alias` blanks (8 ready, 10 CON-SNT need decode); the 16:00 attach sweep read-back.
+
+## Next concrete step
+Oran eyeballs the 3 price lists on the `/dev` URL. If good → `clasp deploy` redeploy prod (`@17`) + git
+commit scoped to `product-on-shelf/`. Then back to the firewall mock-SKU alignment or the carryover ingestion items.
+
+## Suggested skills
+- **`/oran-software-engineer`** on `product-on-shelf-app`. Verify with the jsdom harness
+  (`node /tmp/pos_bundle_test.js`, uses `/tmp/node_modules/jsdom` + `/tmp/pos_engine.js` extract);
+  `tools/push.sh` ships `@HEAD`; `python3 build.py --preview --out FILE` for the inlined monolith.
+
+## Artifacts produced this session
+- `src/flows/_pricelist.html` — only source file changed (the 3 DEFAULTS bundle blocks).
+- `index.html` rebuilt (include-manifest unchanged → no git diff).
+- Throwaway: `/tmp/pos_bundle_test.js` (jsdom harness), `/tmp/pos_preview.html`, `/tmp/pos_engine.js`.
+
+## Decisions (the why)
+- **HCI gets a dna tier; server & storage are dna-less** — hypervisor licensing (NCI/Proxmox VE) is the
+  real recurring line for HCI; server OS is a separate flow, and array OS (PowerStoreOS/ONTAP One) is
+  bundled into the device. The engine handles dna-less bundles (no tier field, no Subscription row).
+- **`bundleCatalog` keeps the curated in-code model list**; ingested `window.PRICING[view].pricelist` is
+  used only as a part#→price source (priceMap) — so drives/CPUs/NICs stay INSIDE the bundle, never become
+  standalone models (the screenshot bug Oran hit earlier with switch).
+- **No `ReadPath.gs` change** — `POS_CATEGORY_TO_VIEW` already maps hci/server/storage → their views.
+- **Component part#s left mock-format** (flagged) — exact-match swap when real xlsx quotes arrive.
+- **Pushed `@HEAD` only, no prod redeploy / no commit** — Oran approved the push, not a prod deploy or commit;
+  visual review gates both.
+
+## References
+- Bundle pattern: switch + firewall in `src/flows/_pricelist.html` (the template replicated).
+- `ReadPath.gs` `POS_CATEGORY_TO_VIEW` (live-price feed) · `reference_product_on_shelf_deploy.md`
+  (clasp v3, `@HEAD` loop, prod deploy id `AKfycbxMT6TI…`).
+
+> Resume: `/oran-software-engineer` on `product-on-shelf-app` — confirm Oran's eyeball of the Server/HCI ·
+> Standalone Server · Storage bundle price lists on `/dev`; if good, redeploy prod (`@17`) + commit scoped
+> to `product-on-shelf/`. Then firewall mock-SKU alignment / carryover ingestion items. Verify via
+> `/tmp/pos_bundle_test.js`.
+
+---
+
+# Handoff — Product on Shelf (cont.)
+_Session: 2026-06-04 · software-engineer mode · xlsx cost-quote parser fix (firewall/HCI/server now ingest)_
+
+## Stage
+Ingestion, `Ingest_Email.gs` only. Diagnosed why distributor **xlsx cost quotes never reached `Price`**
+and **fixed the xlsx column-detector** — Nutanix HW/SW (+ Kaspersky, Fortinet) parts now parse and queue
+in `_alias`. **Pushed to Apps Script `@HEAD`, NOT git-committed.** Read path / app unchanged.
+
+## What happened (in order)
+1. **Verified the scheduled fetch is healthy** (read `_sync_log` live): daily ~02:57 + **16:00 attach** both
+   fire on time, all `ok`. **No quota limit today** (the "Service invoked too many times" errors are all 06-01).
+2. **Diagnosed why firewall/HCI/server prices were absent** — NOT a fetch/quota problem. Two findings:
+   - **Two kinds of Excel "price" mail:** genuine **vendor COST quotes** (distributor-sent, e.g.
+     `True Internet Hardware Cost.xlsx` from `nutanix.com`, `[EXT]` — already in sweep scope) vs **SCM's OWN
+     selling quotes** (`Quote-SCM-*.xlsx`, sent by colleagues, often stale). Oran picked **option A: cost-only**
+     — do NOT broaden the sender filter (would ingest our own selling prices, breaking the cost DB).
+   - **Root cause = the xlsx parser's header detector.** `findHeaderRow_` required `Part No`/`P/N` + `Unit
+     Price`/`Dealer`/`Total`. Nutanix cost sheets use **`Product Code`** + **`Price to SCM…`** → no header
+     found → file silently skipped → **zero non-Cisco parts in `_alias`** (the smoking gun).
+3. **Built a read-only probe** `probeXlsxLayout()` (writes first rows of distributor xlsx into a throwaway
+   `_probe` tab; never writes Price/_alias) → read the real layouts back via Drive MCP.
+4. **Fixed the parser** (`INGEST_COL` + `findHeaderRow_`): added `product code`/`item code`/`sku` to the part
+   regex, `unit cost`/`price to scm`/`net price`/`cost` to the price regex, and a **one-column-one-role guard**
+   (`used`/`break`) so "Product Code" is claimed by `part`, not double-claimed by `desc`. Verified with
+   `/tmp/parser_test.js` against the REAL probe rows (current parser → 0 rows; fixed → captures
+   `NX-8170-G10`=18,000,000 + `SW-NCI-PRO-AP`=5,828,000; RVTools/questionnaire still 0). `node --check` clean. Pushed `@HEAD`.
+5. **Confirmed live** — the 14:55 attach run (after the 14:48 push) `upserted 29`; `NX-8170-G10` +
+   `SW-NCI-PRO-AP` now in `_alias` **blank**, dated 2026-06-04. Bonus new parts unlocked: **Kaspersky EDR**
+   (`KL40664…`) + **Fortinet Cloud** (`FC-10-…`). Fix works.
+
+## Open questions / blockers
+- 🔴 **New `_alias` blanks are UNMAPPED → no price in the app yet.** `NX-8170-G10`, `SW-NCI-PRO-AP`, Kaspersky,
+  Fortinet sit in `_alias` blank. The schedule keeps *collecting* but **mapping is manual** (`ALIAS_SEED` +
+  `seedAliases()`). Until mapped, they don't reach `Price`/the app.
+- 🔴 **Nutanix price BASIS — Oran's pending decision.** `Price to SCM` is a **LINE TOTAL, not per-unit**:
+  `NX-8170-G10` = 18,000,000 for **qty 5** (~3.6M/node); `SW-NCI-PRO-AP` = 5,828,000 for **320 cores** (~18.2k/core).
+  Map with **per-unit math (÷ qty)** or **as-is**? UNANSWERED — needed before curating these.
+- 🟡 **Dell quote** (`Sony_Quote…xlsx` from `sisthai.com`) has an unstructured layout (no clean header row in
+  the first rows) → won't parse with this fix; needs separate handling.
+- 🟡 **itprice.com idea** (Oran asked): recommended **NO as a cost source** — it's **list/GPL price in USD**,
+  not net THB cost (distributors discount 30–60%+); would be misleading in a cost/quotation tool. At most a
+  **labeled "list price" reference column** for margin display, never the cost field. Oran parked it.
+- 🟡 **Uncommitted** — parser fix + `probeXlsxLayout` pushed `@HEAD`, NOT git-committed. Strip the throwaway
+  `probeXlsxLayout()` + delete the `_probe` tab, then commit scoped to `product-on-shelf/`.
+- ⚪ Carryovers (unchanged this session): `script.send_mail` reauth; Server/HCI/Storage bundle price lists
+  pushed `@HEAD` but NOT prod-redeployed/committed (`_pricelist.html` still `M` in git); 18 Cisco `_alias`
+  blanks (8 ready, 10 `CON-SNT` need parent-device decode).
+
+## Next concrete step
+Get Oran's **per-unit-vs-as-is** call on the Nutanix totals, then curate the new `_alias` blanks
+(Nutanix + Kaspersky + Fortinet) into `ALIAS_SEED` → `seedAliases()` → re-run `fetchAttachmentQuotes()` so
+the prices land. Then commit the parser fix (and strip the probe).
+
+## Suggested skills
+- **`/oran-software-engineer`** — verify by reading the live DB back via Drive MCP (export caches/truncates
+  the big `Price` tab but `_sync_log`/`_alias` are fresh); `/tmp/parser_test.js` for the column-detect logic;
+  `npx @google/clasp push -f` to ship `.gs`. Google is read-only / can't run GAS — Oran runs editor functions.
+
+## Artifacts produced this session
+- `product-on-shelf/Ingest_Email.gs` — `INGEST_COL` + `findHeaderRow_` fix; added `probeXlsxLayout()` (throwaway).
+- Throwaway: `/tmp/parser_test.js` (column-detect harness, all pass); `_probe` tab in the live DB sheet.
+
+## Decisions (the why)
+- **Cost-only ingestion (option A), don't broaden the sender filter** — most inbox "price" xlsx are SCM's own
+  `Quote-SCM-*` selling quotes (stale); ingesting them would pollute the cost DB. Real vendor cost quotes are
+  distributor-sent + `[EXT]` and already in scope; the blocker was the parser, not the filter.
+- **Fix header detection, don't auto-divide by qty** — Cisco HTML tables give genuine *unit* prices (dividing
+  would break them); Nutanix gives *totals*. So capture as-is (quarantined in `_alias`/`unknown:`) and resolve
+  the basis at the mapping step, per Oran's call. Never silently write a misleading per-unit number.
+- **`used`/`break` one-column-one-role guard** — needed because the broadened `part` regex (`product code`)
+  and the existing `desc` regex (`product`) both match "Product Code"; first-match-in-key-order claims it for `part`.
+
+## References
+- Live DB `1kzKWvaJN7z7wdcYjbcZHYXZpFfIxsqFyBDg8Ysxs7kY` (`_sync_log`/`_alias`/`Price`/`_probe`) ·
+  `Ingest_Email.gs` (`INGEST_COL` ~610, `findHeaderRow_` ~785, `fetchAttachmentQuotes` ~442, `ALIAS_SEED`) ·
+  `reference_pos_data_flow.md` · `reference_product_on_shelf_deploy.md` (clasp v3 / `@HEAD`).
+
+> Resume: `/oran-software-engineer` on `product-on-shelf-app` — get Oran's per-unit-vs-as-is call on the
+> Nutanix totals, curate the new `_alias` blanks (Nutanix/Kaspersky/Fortinet) into `ALIAS_SEED` →
+> `seedAliases()` → re-run `fetchAttachmentQuotes()`; then commit the parser fix + strip `probeXlsxLayout`/`_probe`.
