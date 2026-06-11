@@ -408,7 +408,34 @@ var ALIAS_SEED = [
   ['V-ESSSTD-VS-P0ARE-00','backup:veeam:ess-std-maint-1y',       'Essentials Std annual basic maintenance renewal -> support_yr'],
   ['V-ESSSTD-VS-P024M-00','backup:veeam:ess-std-maint-uplift',   'Essentials Std 24x7 maintenance uplift, 1 month -> support_yr'],
   ['V-ESSSTD-VS-P01MR-00','backup:veeam:ess-std-maint-1m',       'Essentials Std monthly basic maintenance renewal -> support_yr'],
-  ['V-ESSVUL-2S-PS1MG-10','backup:veeam:ess-universal-migration','Express migration Essentials Std -> Universal -> lic_yr']
+  ['V-ESSVUL-2S-PS1MG-10','backup:veeam:ess-universal-migration','Express migration Essentials Std -> Universal -> lic_yr'],
+  // --- 2026-06-11 batch: Cisco wireless quote (CW9176/CW9800L), new C9200L parts, Nutanix NX-1175S ---
+  ['NX-1175S-G10',        'hci:nutanix:nx-1175s-g10',    'NX-1175S-G10 node (1-node cfg) -> hw, per node (line total / qty)'],
+  ['C9200L-24PXG-4X-E',   'switch:cisco:c9200l-24pxg-4x-e','C9200L 24p 8xmGig PoE+, 4x10G'],
+  ['C9200L-STACK-KIT',    'switch:cisco:c9200l-stack-kit', 'C9200L stack module'],
+  ['PWR-C5-600WAC/2',     'switch:cisco:pwr-c5-600wac',  '600W AC Config 5 secondary PSU'],
+  ['CON-SNT-C930024U',    'switch:cisco:c9300-24ux-e',   'SNTC-8x5xNBD support -> support_yr (SNTP- sibling = 24x7)'],
+  ['CON-SNT-C920L2EP',    'switch:cisco:c9200l-24pxg-4x-e','SNTC-8x5xNBD support -> support_yr'],
+  ['CW9176I-CFG',         'wireless:cisco:cw9176i',      'Cisco Wireless 9176I AP (Wi-Fi 7)'],
+  ['CW9176D1-CFG',        'wireless:cisco:cw9176d1',     'Cisco Wireless 9176D1 AP (Wi-Fi 7, directional)'],
+  ['CW9174E-RTG',         'wireless:cisco:cw9174e',      'Cisco Wireless 9174E AP (Wi-Fi 7, external ant)'],
+  ['CON-L1NBD-CW9176IC',  'wireless:cisco:cw9176i',      'ENH 8x5xNBD support -> support_yr'],
+  ['CON-L1NBD-CW9176D1',  'wireless:cisco:cw9176d1',     'ENH 8x5xNBD support -> support_yr'],
+  ['CON-L1NBD-CW97ICFG',  'wireless:cisco:cw9174e',      'ENH 8x5xNBD support -> support_yr'],
+  ['CW-ANT-T-D2-D8',      'wireless:cisco:cw-ant-t-d2-d8','Triband directional antenna DART8'],
+  ['CW-MNT-9',            'wireless:cisco:cw-mnt-9',     'Integrated AP mount'],
+  ['CW9800L',             'wireless:cisco:cw9800l',      'CW9800L wireless controller'],
+  ['CON-SNT-CW98A1BL',    'wireless:cisco:cw9800l',      'STD 8x5xNBD controller support -> support_yr'],
+  ['CW9800L-RFID-1R',     'wireless:cisco:cw9800l-rfid', 'RFID tag for CW9800L'],
+  ['CW9800L-RMNT',        'wireless:cisco:cw9800l-rmnt', 'CW9800L rack mount tray'],
+  ['LIC-CW-E',            'wireless:cisco:lic-cw-e',     'Cisco Wireless License Essentials -> lic_yr'],
+  ['LIC-ENT-3YR',         'wireless:meraki:lic-ent-3yr', 'Meraki MR Enterprise 3yr -> lic_yr'],
+  // --- Kaspersky Next EDR Optimum (endpoint flow; per-tier user-band SKUs) ---
+  ['KL40664ASF8',         'endpoint:kaspersky:edr-opt-150-249-1y',  'EDR Optimum 150-249 users 1yr Base -> lic_yr'],
+  ['KL40664ATF8',         'endpoint:kaspersky:edr-opt-250-499-1y',  'EDR Optimum 250-499 users 1yr Base -> lic_yr'],
+  ['KL40664ATF9',         'endpoint:kaspersky:edr-opt-250-499-1y-rnw','EDR Optimum 250-499 users 1yr Renewal -> lic_yr'],
+  ['KL40664AUF8',         'endpoint:kaspersky:edr-opt-500-999-1y',  'EDR Optimum 500-999 users 1yr Base -> lic_yr'],
+  ['KL40664AUT8',         'endpoint:kaspersky:edr-opt-500-999-3y',  'EDR Optimum 500-999 users 3yr Base -> lic_yr']
 ];
 /**
  * Upsert the alias mappings: FILL the sku_key of existing blank rows (the discovery sweep
