@@ -1475,3 +1475,94 @@ confirmed post-13:11 `seedAliases()` run → hunt a real `seedAliases` bug. Then
 > Resume: `/oran-software-engineer` on `product-on-shelf-app` — re-pull the DB export, diff vs the
 > baseline above; confirm hci prices + filled aliases; re-run `seedAliases()`+`fetchAttachmentQuotes()`
 > if the seed predated 13:11. Then curate CON-SNT/Kaspersky/FC-10 blanks.
+
+---
+
+# Handoff — Product on Shelf (cont.)
+_Session: 2026-06-10 PM · software-engineer mode · Price-tab dedupe + live web sync_
+
+## What shipped (commit `dea4592`, pushed GitHub + @HEAD + **prod redeployed @17→@18**)
+- **Diagnosed "duplicate/loop" in Price**: NOT a bug — append-with-history wrote one row per RFQ-reply
+  date (244/333 rows were superseded history; 0 true active dups). Fixed the design instead:
+  - `reconcile_` now **skips re-quoted unchanged amounts** (run counter `unchanged`).
+  - **`Price_History` tab**: superseded rows auto-sweep there at the end of every write run
+    (`sweepSupersededToHistory_`); `compactPriceTab()` = manual/one-time migration. Price stays
+    one current row per (sku_key, price_type). `readPriceState_` dedupes against history ids.
+  - `classifyPriceType_`: cloud-mgmt subs → `lic_yr` (FortiCloud was landing as hw).
+- **Web sync**: `posBuildPricing_` now ALSO emits `P[view].parts = {PART#: {hw, lic_yr, support_yr}}`
+  (old best-per-sku shape dropped all support prices when hw existed). Engine resolves bundle
+  components per type, support falls back to the **chassis part's ingested support_yr** (SmartNet/
+  Net.Cover alias onto parent sku), and shows **"N live prices" badge + emerald dots** per live line.
+- Verified: 18/18 reconcile harness, 11/11 posBuildPricing_ vs REAL 89 active rows, 7/7 jsdom
+  (C9300 bundle device = 308,640+36,430+1,830 all live; support 60,540 via chassis fallback).
+- Prod @18 also finally serves the 06-04 hci/server/storage bundle lists (were @HEAD-only).
+
+## Oran's GAS steps
+- 🔴 **`compactPriceTab()`** once → moves the 244 old history rows out; Price becomes the clean ~89-row list.
+- 🔴 **Re-run `seedAliases()` + `fetchAttachmentQuotes()`** — the 13:17 runs left NO trace in the fresh
+  export (29 `_alias` blanks unchanged, no attach `_sync_log` row) despite sheet modifiedTime 13:22;
+  likely ran against pre-13:11 code or failed silently. Safe to re-run; will also auto-sweep.
+- 🟡 Carryovers: 10 CON-SNT decode, 5 Kaspersky + 2 FC-10 blanks, `_probe` tab delete, `script.send_mail` reauth.
+
+> Resume: confirm compaction + seed/fetch (Price_History exists, blanks drop 29→~17, hci rows appear);
+> then curate remaining blanks. Eyeball /exec — live badges should show on Switch price list.
+
+---
+
+# Handoff — Product on Shelf (cont.)
+_Session: 2026-06-11 · software-engineer mode · "stuck" diagnosis (false alarm) + wireless/Kaspersky alias batch_
+
+## Stage
+Pipeline fully healthy end-to-end. Price tab compacted + clean (125 rows, all active; history in
+`Price_History` 254 rows). **Nutanix prices LIVE in the DB**: `hci:nutanix:nx-8170-g10` hw ฿3.6M/node,
+`hci:nutanix:nci-pro` support ฿18,212.5/core (per-unit ÷ qty verified). Prod web app serves @18.
+
+## Where we left off
+Oran reported his GAS runs "stuck" — **diagnosed as false alarm by reading the live DB back**: every
+run completed `ok` (`compactPriceTab`, `seedAliases`, `fetchAttachmentQuotes` 14:47 `upserted 19`,
+plus 15:31 / 16:34-trigger / 23:06 / 02:57-daily). The attach sweep just takes 3–5 min of editor
+spinner (Drive xlsx conversion); GAS caps at 6 min. Check View → Executions, not the spinner.
+
+Then curated the **25 new `_alias` blanks** the runs surfaced (a new Cisco wireless quote + more):
+CW9176I/D1/9174E APs + CW9800L controller + antennas/mounts/RFID (`wireless:cisco:*`), CON-L1NBD/
+CON-SNT supports → parent `support_yr`, C9200L-24PXG-4X-E + stack kit + PSU, NX-1175S-G10
+(`hci:nutanix:*`), LIC-CW-E + Meraki LIC-ENT-3YR, 5× Kaspersky EDR Optimum user-bands
+(`endpoint:kaspersky:edr-opt-*`). Pushed to Apps Script + committed **`42e0a01`** (123 seed entries, dup-checked).
+
+## Open / Oran's GAS steps
+- 🔴 **Run `seedAliases()` → `fetchAttachmentQuotes()`** once more — prices the wireless gear +
+  NX-1175S into `Price` (Wireless price-list view picks them up automatically via ReadPath).
+- 🟡 **10 old compressed `CON-SNT-*` codes** still need Oran's parent-device decode (e.g. AIRCTRTK,
+  ARAP28KS, CBS35G4U…) — listed in the 06-03 section.
+- 🟡 **2 `FC-10-*` blanks** (0081F / GT71G) look like duplicates of the already-mapped FTN-* FortiCloud
+  parts — verify before mapping.
+- 🟡 **~50 `unknown:*` provisional rows** in Price (invisible to the app) — offered a
+  `cleanupPromotedUnknowns()` to drop ones whose parts now have real sku rows; not built yet.
+- ⚪ Carryovers: `script.send_mail` reauth; `_probe` tab delete.
+
+## Next concrete step
+After Oran's seed+fetch re-run, read the live DB back: confirm wireless/Kaspersky/NX-1175S prices landed
+(blanks should drop ~37 → ~12) and eyeball the Wireless + Server/HCI price lists on `/exec` (@18) for
+live badges.
+
+## Artifacts this session
+- `product-on-shelf/Ingest_Email.gs` — ALIAS_SEED +25 (commit `42e0a01`, pushed GitHub + @HEAD).
+- Throwaway: `/tmp/db_live_0611.ods`, `/tmp/db0611.pkl` (live readbacks).
+
+## Decisions (the why)
+- **"Stuck" = expected runtime, not a hang** — every `_sync_log` row finished in 3–5 min `ok`; the GAS
+  6-min cap makes a true hang impossible. Teach: judge by Executions panel / `_sync_log`, not the spinner.
+- **Mapped all 25 new blanks in one batch** — descriptions were explicit (no compressed codes), so no
+  decode ambiguity; same conventions as before (support → parent sku, SFP/antenna accessories under
+  their own part).
+- **Kaspersky bands as distinct models** (150-249/250-499/500-999 × term) — different user-band SKUs are
+  different prices, not history of one model; renewal split from base for the same reason.
+
+## References
+- Live DB `1kzKWvaJN7z7…` (`_sync_log`/`_alias`/`Price`/`Price_History`) · ODS export via Drive MCP is
+  the reliable readback (includes `_RBAC`; xlsx/NL export caches harder) · prod deployment @18
+  (`AKfycbxMT6TI…`), @HEAD = dev.
+
+> Resume: `/oran-software-engineer` on `product-on-shelf-app` — read the live DB back after Oran's
+> `seedAliases()`+`fetchAttachmentQuotes()` re-run; confirm wireless/Kaspersky/NX-1175S landed; then
+> CON-SNT decode batch or `cleanupPromotedUnknowns()`.
