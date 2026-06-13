@@ -515,6 +515,46 @@ function checkAliasCollisions() {
   return clashes;
 }
 
+/**
+ * Retire provisional `unknown:*` Price rows whose part has since been curated to a real sku_key.
+ * Unmatched priced parts are captured under `unknown:unknown:<part>` (runIngest_) — invisible to the
+ * app (no `unknown` view) but cluttering Price. Once `_alias` maps the part to a real sku, the real
+ * price arrives under that sku on the next ingest, leaving the unknown row as dead weight. This
+ * supersedes those rows (swept to Price_History, never deleted). Idempotent; safe to re-run.
+ * @param {boolean} [dryRun] log what would be retired without writing. Default false.
+ * @return {number} rows retired (0 on dry run).
+ */
+function cleanupPromotedUnknowns(dryRun) {
+  var ss = db_();
+  // The unknown sku_key a given raw part would have produced (must mirror runIngest_ exactly).
+  var unknownKeyFor = function (raw) {
+    return 'unknown:unknown:' + normPart_(raw).toLowerCase().replace(/[:#|]/g, '-');
+  };
+  // raw parts now curated to a REAL (non-unknown) sku -> the unknown keys they superseded.
+  var a = sheetData_(ss, '_alias'), promoted = {};
+  a.rows.forEach(function (r) {
+    var raw = String(r[a.col.raw_string] || '').trim(), sku = String(r[a.col.sku_key] || '').trim();
+    if (raw && sku && sku.indexOf('unknown:') !== 0) promoted[unknownKeyFor(raw)] = sku;
+  });
+  // Active Price rows whose sku_key is one of those promoted unknown keys.
+  var d = sheetData_(ss, 'Price'), supersedeRowIdx = {}, hits = [];
+  d.rows.forEach(function (r, i) {
+    var sku = String(r[d.col.sku_key] || '');
+    var live = String(r[d.col.superseded]).toUpperCase() !== 'TRUE';
+    if (live && promoted[sku]) { supersedeRowIdx[i + 2] = true; hits.push(sku + ' -> ' + promoted[sku]); }
+  });
+  if (!hits.length) { Logger.log('cleanupPromotedUnknowns: nothing to retire.'); return 0; }
+  if (dryRun) {
+    Logger.log('cleanupPromotedUnknowns[DRY]: would retire ' + hits.length + ' promoted unknown row(s):');
+    hits.forEach(function (h) { Logger.log('  - ' + h); });
+    return 0;
+  }
+  applySupersede_(ss, supersedeRowIdx);
+  var swept = sweepSupersededToHistory_(ss);
+  Logger.log('cleanupPromotedUnknowns: retired ' + hits.length + ' row(s) (→ history ' + swept + ').');
+  return hits.length;
+}
+
 /** Install the daily time-driven trigger (run once, after a clean DRY_RUN). */
 function installEmailIngestTrigger() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
@@ -621,6 +661,10 @@ function runIngest_(query, mode, opts) {
             run.provisional++;
           }
           var ptype = classifyPriceType_(it.part, it.desc);
+          if (ptype !== 'hw') {
+            var yrs = termYears_(it.part, it.desc);
+            if (yrs > 1) it.unit_thb = it.unit_thb / yrs;   // annualize multi-year term totals -> honest per-yr
+          }
           reconcile_(sku, ptype, it, ctx, priceState, toAppend, supersedeRowIdx, run);
         }
       }
@@ -887,6 +931,24 @@ function classifyPriceType_(part, desc) {
   // and cloud-management subscriptions (e.g. "3Yr FortiGate Cloud Management" — not hardware).
   if (/lic|licen|subscription|term|dna|-3y|-1y|-5y|(device|user)\s*cal|\bcloud\b|\b\d+\s*yr\b/.test(s)) return 'lic_yr';
   return 'hw';
+}
+
+/**
+ * Detect the licence/support TERM in years from a part number or description, so multi-year term
+ * TOTALS can be annualized to a true per-year figure. Price lic_yr / support_yr render as
+ * "per unit/yr" in the app, but distributors quote terms as a lump total (e.g. C9300-DNA-E-24-3Y
+ * is a 3-year total) — without this they'd display ~3x the real annual price.
+ * Signals, most reliable first: the "-3Y"/"-3YR" part suffix, then "<n> yr/year term", then any
+ * "<n> yr/year". Bounded to 1..7 so model digits never read as a term; defaults to 1. Months
+ * ("36N") are intentionally NOT parsed (ambiguous vs model codes; the only such SKU was retired).
+ */
+function termYears_(part, desc) {
+  var p = String(part), s = p + ' ' + String(desc);
+  var m = p.match(/-(\d+)Y(?:RS?)?\b/i)
+       || s.match(/(\d+)\s*-?\s*(?:yrs?|years?)\s+term\b/i)
+       || s.match(/(\d+)\s*-?\s*(?:yrs?|years?)\b/i);
+  var y = m ? parseInt(m[1], 10) : 1;
+  return (y >= 1 && y <= 7) ? y : 1;
 }
 
 // ---------------------------------------------------------------------------
