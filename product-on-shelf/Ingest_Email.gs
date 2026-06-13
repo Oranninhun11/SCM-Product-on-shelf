@@ -309,7 +309,9 @@ var ALIAS_SEED = [
   ['NX-8170-G10',         'hci:nutanix:nx-8170-g10',     'NX-8170-G10 node (1-node cfg) -> hw, per node (line total / qty)'],
   ['SW-NCI-PRO-AP',       'hci:nutanix:nci-pro',         'NCI Pro subscription + L3 support -> per core (verify qty basis on readback)'],
   // --- Cisco support contracts (CON-*) -> support_yr, mapped to their parent device ---
-  ['CON-SNTP-C930024U',   'switch:cisco:c9300-24ux-e',   'SNTC-24x7x4 support -> support_yr'],
+  // CON-SNTP-C930024U (SNTC-24x7x4) intentionally UNMAPPED: same parent+type as CON-SNT-C930024U
+  // (8x5xNBD) below, and support_yr keeps one row per sku_key (newest wins) -> they'd overwrite each
+  // other. 8x5xNBD is the canonical catalog support tier for C9300-24UX-E; 24x7 stays a blank _alias.
   ['CON-SNTP-C93002TE',   'switch:cisco:c9300-24t-e',    'SNTC-24x7x4 support -> support_yr'],
   ['CON-SNT-C920L24X',    'switch:cisco:c9200l-24t-4x-e','SNTC-8x5xNBD support -> support_yr'],
   ['CON-SNT-C920L4XE',    'switch:cisco:c9200l-48t-4x-e','SNTC-8x5xNBD support -> support_yr'],
@@ -414,7 +416,7 @@ var ALIAS_SEED = [
   ['C9200L-24PXG-4X-E',   'switch:cisco:c9200l-24pxg-4x-e','C9200L 24p 8xmGig PoE+, 4x10G'],
   ['C9200L-STACK-KIT',    'switch:cisco:c9200l-stack-kit', 'C9200L stack module'],
   ['PWR-C5-600WAC/2',     'switch:cisco:pwr-c5-600wac',  '600W AC Config 5 secondary PSU'],
-  ['CON-SNT-C930024U',    'switch:cisco:c9300-24ux-e',   'SNTC-8x5xNBD support -> support_yr (SNTP- sibling = 24x7)'],
+  ['CON-SNT-C930024U',    'switch:cisco:c9300-24ux-e',   'SNTC-8x5xNBD support -> support_yr (canonical tier; 24x7 SNTP sibling left unmapped above)'],
   ['CON-SNT-C920L2EP',    'switch:cisco:c9200l-24pxg-4x-e','SNTC-8x5xNBD support -> support_yr'],
   ['CW9176I-CFG',         'wireless:cisco:cw9176i',      'Cisco Wireless 9176I AP (Wi-Fi 7)'],
   ['CW9176D1-CFG',        'wireless:cisco:cw9176d1',     'Cisco Wireless 9176D1 AP (Wi-Fi 7, directional)'],
