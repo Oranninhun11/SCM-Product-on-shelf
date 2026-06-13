@@ -1566,3 +1566,83 @@ live badges.
 > Resume: `/oran-software-engineer` on `product-on-shelf-app` — read the live DB back after Oran's
 > `seedAliases()`+`fetchAttachmentQuotes()` re-run; confirm wireless/Kaspersky/NX-1175S landed; then
 > CON-SNT decode batch or `cleanupPromotedUnknowns()`.
+
+---
+
+# Handoff — Product on Shelf (cont.)
+_Session: 2026-06-14 · software-engineer mode · price collision guard + term annualization + unknown cleanup_
+
+## Stage
+Ingestion correctness, `Ingest_Email.gs` only. Three pricing-correctness fixes built + verified
+locally + committed + pushed (GitHub + Apps Script `@HEAD`). App/read-path code unchanged. All gated
+on Oran's next GAS editor run to take live effect. Pipeline otherwise healthy (prod serves @18).
+
+## What shipped this session (4 commits on `product-on-shelf-app`, all `Ingest_Email.gs`)
+- **`54acf6d` — C9300-24UX-E support-tier collision fix.** `CON-SNT-C930024U` (8x5xNBD) and the
+  pre-existing `CON-SNTP-C930024U` (24x7x4) both mapped to `switch:cisco:c9300-24ux-e` `support_yr`;
+  read model keeps one row per (sku_key, price_type) newest-wins → silent overwrite. Retired the 24x7
+  alias (commented, becomes blank `_alias`, Veeam-renewal convention). **8x5xNBD canonical** (Oran's pick).
+- **`d3dafbf` — generalized the fix into a guard.** New `aliasCollisions_(entries)` (pure) +
+  `checkAliasCollisions()` (editor-runnable, reads live `_alias`), auto-run at end of `seedAliases()`.
+  Groups effective mapping by (sku_key, `classifyPriceType_`); flags any slot fed by 2+ distinct parts.
+  Immediately found 2 more collisions, **resolved per Oran**: `fortigate-70g support_yr` → keep **1yr**
+  `TN-FG70GARBO12N` (drop 3yr); `c9300-dna-e-24 lic_yr` → keep **3yr** `C9300-DNA-E-24-3Y` (drop 1yr renewal).
+- **`34b07be` — term annualization + `cleanupPromotedUnknowns()`.**
+  - 🔴→✅ **Annualization (real correctness win):** Price `lic_yr`/`support_yr` render as "per unit/yr"
+    but distributors quote multi-year *totals* (e.g. DNA-E-24-3Y = 3yr total) → app showed ~3× the real
+    annual price. New `termYears_(part,desc)` (reads `-3Y`/`-3YR` suffix, "<n> yr/year term", "<n> yr";
+    bounded 1..7, default 1); `runIngest_` divides non-hw amounts by term before `reconcile_`.
+  - **`cleanupPromotedUnknowns(dryRun)`** — retires provisional `unknown:*` Price rows whose part is now
+    curated to a real sku (swept to `Price_History`, never deleted). Reuses `applySupersede_`+sweep; idempotent.
+
+## Verified (local — Google read-only, can't run GAS)
+- `node --check` clean on every commit.
+- Collision guard: finds exactly the real collisions, **0 after resolution**, never re-flags fixed/non-colliding skus.
+- `termYears_`: 11/11 real-SKU cases (DNA/Meraki/Kaspersky 3yr→3, FortiCloud "1yr log, 3yr term"→3, hw/support→1).
+
+## Open questions / blockers
+- 🔴 **Oran's GAS run pending** — none of this is live until he runs the editor functions (below). Claude can't run GAS.
+- 🟡 **Annualization only corrects rows ingested AFTER the push** — `price_id = sku#type#date` has no
+  amount, so a same-date re-ingest of an already-written full-total row is skipped. Most term SKUs were
+  unmapped blanks (no existing Price row) so first ingest is correct; any pre-existing term-total row
+  self-corrects on the next dated quote (or manual edit).
+- 🟡 **3 retired aliases** (`CON-SNTP-C930024U`, `TN-FG70GARBO36N`, `C9300-DNA-E-24-1R`) sit as blank
+  `_alias` rows; any already-written Price row for those slots persists until a canonical-part quote supersedes it.
+- 🟡 Carryovers (unchanged): 10 `CON-SNT-*` need parent decode; 2 `FC-10-*` likely FTN-* dups; `_probe` tab delete; `script.send_mail` reauth.
+- ⚪ Not done (deliberately, low value): "rough" `classifyPriceType_` labels; no `part_no` column in `Price`.
+
+## Oran's GAS steps (the unlock)
+1. **`cleanupPromotedUnknowns(true)`** (dry-run, logs what it'd retire) → then **`cleanupPromotedUnknowns()`** to apply.
+2. **`seedAliases()`** — watch log for `checkAliasCollisions: OK …` (or ⚠). Then **`fetchAttachmentQuotes()`** — annualization applies to new quotes.
+
+## Next concrete step
+Read the live DB back (after Oran's seed/fetch + cleanup runs): confirm `Price` has zero
+`(sku_key, price_type)` duplicated active, term prices now annualized, unknown rows swept.
+
+## Suggested skills
+- **`/oran-software-engineer`** — verify via local node harness over `ALIAS_SEED`/extracted fns; live confirm by reading DB back via Drive MCP (ODS export most reliable; xlsx caches 10-15 min).
+
+## Artifacts produced this session
+- `product-on-shelf/Ingest_Email.gs` — collision fix + `aliasCollisions_`/`checkAliasCollisions` guard +
+  `termYears_` annualization + `cleanupPromotedUnknowns`. Commits `54acf6d`, `d3dafbf`, `34b07be` (+ a docs handoff commit).
+
+## Decisions (the why)
+- **Guard at the curation gate, not a tier dimension through ReadPath/bundle engine** — app displays ONE
+  support/lic number per device; routing tiers through the render path builds unused capability. Right
+  invariant = one canonical price per (sku_key, price_type); make violations LOUD, not silent.
+- **Retire non-canonical siblings (comment out), don't auto-divide** — which tier/term is canonical is
+  Oran's business call (asked each time); collapsing to one slot is correct since the product shows one.
+- **Annualize at ingest, not a new `term_years` Price column** — surgical, reversible (revert + re-ingest),
+  no live-schema migration. Makes the existing "/yr" label honest. Trade-off: original term-total not retained.
+- **`cleanupPromotedUnknowns` supersedes (→ history), never deletes** — house rule; unknown rows are
+  invisible to the app anyway (no `unknown` view), so retiring is pure declutter with a safety net.
+
+## References
+- `Ingest_Email.gs`: `aliasCollisions_`/`checkAliasCollisions` (~after seedAliases), `termYears_` (after
+  `classifyPriceType_`), annualization in `runIngest_` (~line 623), `cleanupPromotedUnknowns` (after guard).
+- `ReadPath.gs` `posBuildPricing_` (line 85 "per unit/yr" label; one row per sku_key|type).
+- `reference_pos_data_flow.md` · `reference_product_on_shelf_deploy.md` (clasp v3 / `@HEAD` via `tools/push.sh`).
+
+> Resume: `/oran-software-engineer` on `product-on-shelf-app` — after Oran runs `cleanupPromotedUnknowns()`
+> + `seedAliases()` + `fetchAttachmentQuotes()`, read the live DB back: confirm no duplicate active
+> (sku_key, price_type), annualized term prices, swept unknowns. Then CON-SNT decode batch.
