@@ -326,7 +326,9 @@ var ALIAS_SEED = [
   ['C9300-DNA-E-24-3Y',   'switch:cisco:c9300-dna-e-24', 'DNA Essentials 24p, 3yr term'],
   ['C9200L-DNA-E-24-3Y',  'switch:cisco:c9200l-dna-e-24','DNA Essentials 24p, 3yr term'],
   ['C9200L-DNA-E-48-3Y',  'switch:cisco:c9200l-dna-e-48','DNA Essentials 48p, 3yr term'],
-  ['C9300-DNA-E-24-1R',   'switch:cisco:c9300-dna-e-24', 'DNA Essentials 24p, 1yr renewal'],
+  // C9300-DNA-E-24-1R (1yr renewal) intentionally UNMAPPED: collides with C9300-DNA-E-24-3Y on
+  // (c9300-dna-e-24, lic_yr); 3yr term is canonical. See checkAliasCollisions().
+
   ['C9300L-DNA-E-24-1R',  'switch:cisco:c9300l-dna-e-24','DNA Essentials 24p (9300L), 1yr renewal'],
   // --- Cisco power supplies / stacking / accessories (hw); transceivers + DAC now under cabling: ---
   ['PWR-C1-1100WAC-P/2',  'switch:cisco:pwr-c1-1100wac', '1100W AC PSU (secondary)'],
@@ -362,8 +364,9 @@ var ALIAS_SEED = [
   ['RH00004',             'server:redhat:rhel-server-std','Red Hat Enterprise Linux Server, Standard'],
   // --- Fortinet FortiGate (firewall) — inline service/subscription lines only; the FG-70G HW
   //     price itself arrives as an xlsx attachment (#2, dormant until Drive enabled). ---
-  ['TN-FG70GARBO36N',     'firewall:fortinet:fortigate-70g',   'FG-70G Advance Replacement 24x7/BKK, 3yr -> support_yr'],
-  ['TN-FG70GARBO12N',     'firewall:fortinet:fortigate-70g',   'FG-70G Advance Replacement 24x7/BKK, 1yr -> support_yr'],
+  // TN-FG70GARBO36N (3yr) intentionally UNMAPPED: collides with TN-FG70GARBO12N on
+  // (fortigate-70g, support_yr); 1yr is canonical (annual basis). See checkAliasCollisions().
+  ['TN-FG70GARBO12N',     'firewall:fortinet:fortigate-70g',   'FG-70G Advance Replacement 24x7/BKK, 1yr -> support_yr (canonical; 3yr sibling unmapped above)'],
   ['FTN-0081F1310236-N',  'firewall:fortinet:forticloud-mgmt', 'FortiGate Cloud Mgmt+Analysis, 1yr log, 3yr term -> lic_yr'],
   ['FTN-GT71G1310212-N',  'firewall:fortinet:forticloud-std',  'FortiGate Cloud Standard subscription, 1yr -> lic_yr'],
   // --- HPE Aruba ClearPass (NAC) ---
@@ -462,7 +465,54 @@ function seedAliases() {
   });
   if (toAppend.length) appendRows_(ss, '_alias', toAppend);
   Logger.log('seedAliases: filled ' + filled + ' blank rows, appended ' + toAppend.length + ' new.');
+  checkAliasCollisions();   // guard: surface any (sku_key, price_type) now mapped from 2+ parts
   return filled + toAppend.length;
+}
+
+/**
+ * Detect curation collisions: 2+ DISTINCT part numbers that map to the same
+ * (sku_key, price_type) slot. Price keeps one active row per (sku_key, price_type)
+ * — price_id = sku#type#date, reconcile_ supersedes newest-wins — so two parts in one
+ * slot silently overwrite each other, leaving a non-deterministic (wrong) support/licence
+ * figure. This is the general form of the C9300 support-tier bug (CON-SNT vs CON-SNTP):
+ * every such clash must be a curated choice, never a silent last-writer-wins.
+ *
+ * @param {Array<Array>} entries  effective alias mapping rows: [part, sku_key, note]
+ * @return {Array<{sku_key:string, price_type:string, parts:string[]}>}  one per colliding slot
+ */
+function aliasCollisions_(entries) {
+  var bySlot = {};   // 'sku_key|price_type' -> { sku, ptype, parts:{normPart -> raw} }
+  (entries || []).forEach(function (e) {
+    var part = String(e[0] || '').trim(), sku = String(e[1] || '').trim();
+    if (!part || !sku) return;
+    var ptype = classifyPriceType_(part, String(e[2] || ''));
+    var slot = bySlot[sku + '|' + ptype] || (bySlot[sku + '|' + ptype] = { sku: sku, ptype: ptype, parts: {} });
+    slot.parts[normPart_(part)] = part;            // distinct by normalized part#
+  });
+  var out = [];
+  Object.keys(bySlot).forEach(function (k) {
+    var s = bySlot[k], parts = Object.keys(s.parts).map(function (p) { return s.parts[p]; });
+    if (parts.length > 1) out.push({ sku_key: s.sku, price_type: s.ptype, parts: parts });
+  });
+  return out;
+}
+
+/**
+ * Editor-runnable collision report over the LIVE _alias mapping (every row with a curated
+ * sku_key — exactly the set readAlias_/ingest uses). Logs each clash; returns the list.
+ * Resolve by keeping ONE canonical part per slot and leaving the rest unmapped (commented in
+ * ALIAS_SEED / blank in _alias), as done for CON-SNTP-C930024U. Auto-run at the end of seedAliases().
+ */
+function checkAliasCollisions() {
+  var d = sheetData_(db_(), '_alias');
+  var entries = d.rows.map(function (r) {
+    return [r[d.col.raw_string], r[d.col.sku_key], r[d.col.note]];
+  });
+  var clashes = aliasCollisions_(entries);
+  if (!clashes.length) { Logger.log('checkAliasCollisions: OK — no (sku_key, price_type) maps to 2+ parts.'); return clashes; }
+  Logger.log('checkAliasCollisions: ⚠ ' + clashes.length + ' collision(s) — silently overwrite newest-wins; keep one canonical part per slot:');
+  clashes.forEach(function (c) { Logger.log('  ⚠ ' + c.sku_key + ' [' + c.price_type + '] <- ' + c.parts.join(', ')); });
+  return clashes;
 }
 
 /** Install the daily time-driven trigger (run once, after a clean DRY_RUN). */
